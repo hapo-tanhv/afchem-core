@@ -1,0 +1,82 @@
+E:\Freelancer\Hino\AlarmTools\HinoTools.Alarm\ConsoleApp\bin\Debug\ConsoleApp.exe.config
+E:\Freelancer\Hino\AlarmTools\HinoTools.Alarm\ConsoleApp\bin\Debug\ConsoleApp.exe
+E:\Freelancer\Hino\AlarmTools\HinoTools.Alarm\ConsoleApp\bin\Debug\ConsoleApp.pdb
+E:\Freelancer\Hino\AlarmTools\HinoTools.Alarm\ConsoleApp\obj\Debug\ConsoleApp.csproj.CoreCompileInputs.cache
+E:\Freelancer\Hino\AlarmTools\HinoTools.Alarm\ConsoleApp\obj\Debug\ConsoleApp.exe
+E:\Freelancer\Hino\AlarmTools\HinoTools.Alarm\ConsoleApp\obj\Debug\ConsoleApp.pdb
+E:\Freelancer\Hino\AlarmTools\HinoTools.Alarm\ConsoleApp\obj\Debug\ConsoleApp.csproj.AssemblyReference.cache
+C:\Users\Administrator\Desktop\PHAN MEM AT\APP\HinoTools.Alarm (1)\HinoTools.Alarm\ConsoleApp\bin\Debug\ConsoleApp.exe.config
+C:\Users\Administrator\Desktop\PHAN MEM AT\APP\HinoTools.Alarm (1)\HinoTools.Alarm\ConsoleApp\bin\Debug\ConsoleApp.exe
+C:\Users\Administrator\Desktop\PHAN MEM AT\APP\HinoTools.Alarm (1)\HinoTools.Alarm\ConsoleApp\bin\Debug\ConsoleApp.pdb
+C:\Users\Administrator\Desktop\PHAN MEM AT\APP\HinoTools.Alarm (1)\HinoTools.Alarm\ConsoleApp\obj\Debug\ConsoleApp.csproj.CoreCompileInputs.cache
+C:\Users\Administrator\Desktop\PHAN MEM AT\APP\HinoTools.Alarm (1)\HinoTools.Alarm\ConsoleApp\obj\Debug\ConsoleApp.exe
+C:\Users\Administrator\Desktop\PHAN MEM AT\APP\HinoTools.Alarm (1)\HinoTools.Alarm\ConsoleApp\obj\Debug\ConsoleApp.pdb
+C:\Users\Administrator\Desktop\PHAN MEM AT\APP\HinoTools.Alarm (1)\HinoTools.Alarm\ConsoleApp\obj\Debug\ConsoleApp.csproj.AssemblyReference.cache
+C:\Users\hino007\Desktop\LD\ALARM\HinoTools.Alarm\HinoTools.Alarm\ConsoleApp\bin\Debug\ConsoleApp.exe.config
+C:\Users\hino007\Desktop\LD\ALARM\HinoTools.Alarm\HinoTools.Alarm\ConsoleApp\bin\Debug\ConsoleApp.exe
+C:\Users\hino007\Desktop\LD\ALARM\HinoTools.Alarm\HinoTools.Alarm\ConsoleApp\bin\Debug\ConsoleApp.pdb
+C:\Users\hino007\Desktop\LD\ALARM\HinoTools.Alarm\HinoTools.Alarm\ConsoleApp\obj\Debug\ConsoleApp.csproj.CoreCompileInputs.cache
+C:\Users\hino007\Desktop\LD\ALARM\HinoTools.Alarm\HinoTools.Alarm\ConsoleApp\obj\Debug\ConsoleApp.exe
+C:\Users\hino007\Desktop\LD\ALARM\HinoTools.Alarm\HinoTools.Alarm\ConsoleApp\obj\Debug\ConsoleApp.pdb
+C:\Users\hino007\Desktop\LD\ALARM\HinoTools.Alarm\HinoTools.Alarm\ConsoleApp\obj\Debug\ConsoleApp.csproj.AssemblyReference.cache
+C:\Users\Admin\Desktop\HinoTools.Alarm\ConsoleApp\bin\Debug\ConsoleApp.exe.config
+C:\Users\Admin\Desktop\HinoTools.Alarm\ConsoleApp\bin\Debug\ConsoleApp.exe
+C:\Users\Admin\Desktop\HinoTools.Alarm\ConsoleApp\bin\Debug\ConsoleApp.pdb
+C:\Users\Admin\Desktop\HinoTools.Alarm\ConsoleApp\obj\Debug\ConsoleApp.csproj.AssemblyReference.cache
+C:\Users\Admin\Desktop\HinoTools.Alarm\ConsoleApp\obj\Debug\ConsoleApp.csproj.CoreCompileInputs.cache
+C:\Users\Admin\Desktop\HinoTools.Alarm\ConsoleApp\obj\Debug\ConsoleApp.exe
+C:\Users\Admin\Desktop\HinoTools.Alarm\ConsoleApp\obj\Debug\ConsoleApp.pdb
+C:\Users\Admin\Desktop\LongDucScada\HinoTools.Alarm\ConsoleApp\bin\Debug\ConsoleApp.exe.config
+C:\Users\Admin\Desktop\LongDucScada\HinoTools.Alarm\ConsoleApp\bin\Debug\ConsoleApp.exe
+C:\Users\Admin\Desktop\LongDucScada\HinoTools.Alarm\ConsoleApp\bin\Debug\ConsoleApp.pdb
+C:\Users\Admin\Desktop\LongDucScada\HinoTools.Alarm\ConsoleApp\obj\Debug\ConsoleApp.csproj.CoreCompileInputs.cache
+C:\Users\Admin\Desktop\LongDucScada\HinoTools.Alarm\ConsoleApp\obj\Debug\ConsoleApp.exe
+C:\Users\Admin\Desktop\LongDucScada\HinoTools.Alarm\ConsoleApp\obj\Debug\ConsoleApp.pdb
+C:\Users\Admin\Desktop\LongDucScada\HinoTools.Alarm_02082023\ConsoleApp\bin\Debug\ConsoleApp.exe.config
+C:\Users\Admin\Desktop\LongDucScada\HinoTools.Alarm_02082023\ConsoleApp\bin\Debug\ConsoleApp.exe
+C:\Users\Admin\Desktop\LongDucScada\HinoTools.Alarm_02082023\ConsoleApp\bin\Debug\ConsoleApp.pdb
+C:\Users\Admin\Desktop\LongDucScada\HinoTools.Alarm_02082023\ConsoleApp\obj\Debug\ConsoleApp.csproj.AssemblyReference.cache
+C:\Users\Admin\Desktop\LongDucScada\HinoTools.Alarm_02082023\ConsoleApp\obj\Debug\ConsoleApp.csproj.CoreCompileInputs.cache
+C:\Users\Admin\Desktop\LongDucScada\HinoTools.Alarm_02082023\ConsoleApp\obj\Debug\ConsoleApp.exe
+C:\Users\Admin\Desktop\LongDucScada\HinoTools.Alarm_02082023\ConsoleApp\obj\Debug\ConsoleApp.pdb
+C:\Users\Admin\Desktop\LongDucScada\HinoTools.Alarm_16082023\ConsoleApp\bin\Debug\ConsoleApp.exe.config
+C:\Users\Admin\Desktop\LongDucScada\HinoTools.Alarm_16082023\ConsoleApp\bin\Debug\ConsoleApp.exe
+C:\Users\Admin\Desktop\LongDucScada\HinoTools.Alarm_16082023\ConsoleApp\bin\Debug\ConsoleApp.pdb
+C:\Users\Admin\Desktop\LongDucScada\HinoTools.Alarm_16082023\ConsoleApp\obj\Debug\ConsoleApp.csproj.AssemblyReference.cache
+C:\Users\Admin\Desktop\LongDucScada\HinoTools.Alarm_16082023\ConsoleApp\obj\Debug\ConsoleApp.csproj.CoreCompileInputs.cache
+C:\Users\Admin\Desktop\LongDucScada\HinoTools.Alarm_16082023\ConsoleApp\obj\Debug\ConsoleApp.exe
+C:\Users\Admin\Desktop\LongDucScada\HinoTools.Alarm_16082023\ConsoleApp\obj\Debug\ConsoleApp.pdb
+C:\Users\Admin\Desktop\LongDucScada\HinoTools.Alarm_28082023\ConsoleApp\bin\Debug\ConsoleApp.exe.config
+C:\Users\Admin\Desktop\LongDucScada\HinoTools.Alarm_28082023\ConsoleApp\bin\Debug\ConsoleApp.exe
+C:\Users\Admin\Desktop\LongDucScada\HinoTools.Alarm_28082023\ConsoleApp\bin\Debug\ConsoleApp.pdb
+C:\Users\Admin\Desktop\LongDucScada\HinoTools.Alarm_28082023\ConsoleApp\obj\Debug\ConsoleApp.csproj.CoreCompileInputs.cache
+C:\Users\Admin\Desktop\LongDucScada\HinoTools.Alarm_28082023\ConsoleApp\obj\Debug\ConsoleApp.exe
+C:\Users\Admin\Desktop\LongDucScada\HinoTools.Alarm_28082023\ConsoleApp\obj\Debug\ConsoleApp.pdb
+C:\Users\Admin\Desktop\LongDucScada\HinoTools.Alarm_27092023\ConsoleApp\bin\Debug\ConsoleApp.exe.config
+C:\Users\Admin\Desktop\LongDucScada\HinoTools.Alarm_27092023\ConsoleApp\bin\Debug\ConsoleApp.exe
+C:\Users\Admin\Desktop\LongDucScada\HinoTools.Alarm_27092023\ConsoleApp\bin\Debug\ConsoleApp.pdb
+C:\Users\Admin\Desktop\LongDucScada\HinoTools.Alarm_27092023\ConsoleApp\obj\Debug\ConsoleApp.csproj.CoreCompileInputs.cache
+C:\Users\Admin\Desktop\LongDucScada\HinoTools.Alarm_27092023\ConsoleApp\obj\Debug\ConsoleApp.exe
+C:\Users\Admin\Desktop\LongDucScada\HinoTools.Alarm_27092023\ConsoleApp\obj\Debug\ConsoleApp.pdb
+C:\Users\Admin\Desktop\LongDucScada\HinoTools.Alarm_27092023\ConsoleApp\obj\Debug\ConsoleApp.csproj.AssemblyReference.cache
+C:\Users\Admin\Desktop\LongDucScada\HinoTools.Alarm_27092023_Test\ConsoleApp\bin\Debug\ConsoleApp.exe.config
+C:\Users\Admin\Desktop\LongDucScada\HinoTools.Alarm_27092023_Test\ConsoleApp\bin\Debug\ConsoleApp.exe
+C:\Users\Admin\Desktop\LongDucScada\HinoTools.Alarm_27092023_Test\ConsoleApp\bin\Debug\ConsoleApp.pdb
+C:\Users\Admin\Desktop\LongDucScada\HinoTools.Alarm_27092023_Test\ConsoleApp\obj\Debug\ConsoleApp.csproj.AssemblyReference.cache
+C:\Users\Admin\Desktop\LongDucScada\HinoTools.Alarm_27092023_Test\ConsoleApp\obj\Debug\ConsoleApp.csproj.CoreCompileInputs.cache
+C:\Users\Admin\Desktop\LongDucScada\HinoTools.Alarm_27092023_Test\ConsoleApp\obj\Debug\ConsoleApp.exe
+C:\Users\Admin\Desktop\LongDucScada\HinoTools.Alarm_27092023_Test\ConsoleApp\obj\Debug\ConsoleApp.pdb
+C:\Users\Admin\Desktop\HinoTools.Alarm_27092023_Test\ConsoleApp\bin\Debug\ConsoleApp.exe.config
+C:\Users\Admin\Desktop\HinoTools.Alarm_27092023_Test\ConsoleApp\bin\Debug\ConsoleApp.exe
+C:\Users\Admin\Desktop\HinoTools.Alarm_27092023_Test\ConsoleApp\bin\Debug\ConsoleApp.pdb
+C:\Users\Admin\Desktop\HinoTools.Alarm_27092023_Test\ConsoleApp\obj\Debug\ConsoleApp.csproj.AssemblyReference.cache
+C:\Users\Admin\Desktop\HinoTools.Alarm_27092023_Test\ConsoleApp\obj\Debug\ConsoleApp.csproj.CoreCompileInputs.cache
+C:\Users\Admin\Desktop\HinoTools.Alarm_27092023_Test\ConsoleApp\obj\Debug\ConsoleApp.exe
+C:\Users\Admin\Desktop\HinoTools.Alarm_27092023_Test\ConsoleApp\obj\Debug\ConsoleApp.pdb
+C:\Users\tanhv\Project\HinoTools.Alarm_27092023_Test\HinoTools.Alarm_27092023_Test\ConsoleApp\bin\Debug\ConsoleApp.exe.config
+C:\Users\tanhv\Project\HinoTools.Alarm_27092023_Test\HinoTools.Alarm_27092023_Test\ConsoleApp\bin\Debug\ConsoleApp.exe
+C:\Users\tanhv\Project\HinoTools.Alarm_27092023_Test\HinoTools.Alarm_27092023_Test\ConsoleApp\bin\Debug\ConsoleApp.pdb
+C:\Users\tanhv\Project\HinoTools.Alarm_27092023_Test\HinoTools.Alarm_27092023_Test\ConsoleApp\obj\Debug\ConsoleApp.csproj.CoreCompileInputs.cache
+C:\Users\tanhv\Project\HinoTools.Alarm_27092023_Test\HinoTools.Alarm_27092023_Test\ConsoleApp\obj\Debug\ConsoleApp.exe
+C:\Users\tanhv\Project\HinoTools.Alarm_27092023_Test\HinoTools.Alarm_27092023_Test\ConsoleApp\obj\Debug\ConsoleApp.pdb
+C:\Users\tanhv\Project\HinoTools.Alarm_27092023_Test\HinoTools.Alarm_27092023_Test\ConsoleApp\obj\Debug\ConsoleApp.csproj.AssemblyReference.cache

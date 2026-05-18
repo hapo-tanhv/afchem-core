@@ -1,0 +1,17 @@
+E:\Freelancer\Hino\AlarmTools\HinoTools.Alarm\TestClient\bin\Release\TestClient.exe.config
+E:\Freelancer\Hino\AlarmTools\HinoTools.Alarm\TestClient\bin\Release\TestClient.exe
+E:\Freelancer\Hino\AlarmTools\HinoTools.Alarm\TestClient\bin\Release\TestClient.pdb
+E:\Freelancer\Hino\AlarmTools\HinoTools.Alarm\TestClient\bin\Release\HinoTools.Alarm.dll
+E:\Freelancer\Hino\AlarmTools\HinoTools.Alarm\TestClient\bin\Release\iDriver.dll
+E:\Freelancer\Hino\AlarmTools\HinoTools.Alarm\TestClient\bin\Release\MySql.Data.dll
+E:\Freelancer\Hino\AlarmTools\HinoTools.Alarm\TestClient\bin\Release\ToolExtensions.dll
+E:\Freelancer\Hino\AlarmTools\HinoTools.Alarm\TestClient\bin\Release\DriverPluginInterface.dll
+E:\Freelancer\Hino\AlarmTools\HinoTools.Alarm\TestClient\bin\Release\HinoTools.Alarm.pdb
+E:\Freelancer\Hino\AlarmTools\HinoTools.Alarm\TestClient\obj\Release\TestClient.csproj.AssemblyReference.cache
+E:\Freelancer\Hino\AlarmTools\HinoTools.Alarm\TestClient\obj\Release\TestClient.Form1.resources
+E:\Freelancer\Hino\AlarmTools\HinoTools.Alarm\TestClient\obj\Release\TestClient.Properties.Resources.resources
+E:\Freelancer\Hino\AlarmTools\HinoTools.Alarm\TestClient\obj\Release\TestClient.csproj.GenerateResource.cache
+E:\Freelancer\Hino\AlarmTools\HinoTools.Alarm\TestClient\obj\Release\TestClient.csproj.CoreCompileInputs.cache
+E:\Freelancer\Hino\AlarmTools\HinoTools.Alarm\TestClient\obj\Release\TestClient.csproj.CopyComplete
+E:\Freelancer\Hino\AlarmTools\HinoTools.Alarm\TestClient\obj\Release\TestClient.exe
+E:\Freelancer\Hino\AlarmTools\HinoTools.Alarm\TestClient\obj\Release\TestClient.pdb
