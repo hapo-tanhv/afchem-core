@@ -1,4 +1,4 @@
-﻿using ATSCADA;
+using ATSCADA;
 using HinoTools.Alarm.Model;
 using HinoTools.Alarm.Database;
 using System;
@@ -48,7 +48,7 @@ namespace HinoTools.Alarm.Server
         public string UserID { get; set; } = "root";
 
         [Category("Hino Settings")]
-        public string Password { get; set; } = "100100";
+        public string Password { get; set; } = "101101";
 
         [Category("Hino Settings")]
         public string DatabaseName { get; set; } = "scada";

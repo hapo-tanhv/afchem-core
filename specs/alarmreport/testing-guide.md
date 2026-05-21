@@ -14,7 +14,7 @@
 - Database: `scada` (sẽ được tự động tạo)
 
 ### 2. Cấu hình SCADA
-- Mở project ATSCADA có Device `AFChemPLC` với đầy đủ 17 tag thanh ghi.
+- Mở project ATSCADA có Device `AFChemTX01` với đầy đủ 17 tag thanh ghi.
 - Đảm bảo `iDriver` có thể đọc giá trị từ PLC.
 
 ---
@@ -22,7 +22,7 @@
 ## Task 4.1: Giả lập dữ liệu tag
 
 ### Cách 1: Dùng ATSCADA Simulator
-1. Mở ATSCADA Project → đặt chế độ Simulation cho Device `AFChemPLC`.
+1. Mở ATSCADA Project → đặt chế độ Simulation cho Device `AFChemTX01`.
 2. Dùng Tag Editor để set giá trị trực tiếp cho các thanh ghi.
 
 ### Cách 2: Dùng TestServer (WinForms)
@@ -41,17 +41,17 @@ this.alarmReportLogger1.DatabaseName = "scada";
 this.alarmReportLogger1.TableName = "alarmreport";
 this.alarmReportLogger1.PollingInterval = 30000;
 this.alarmReportLogger1.Collection = new string[] {
-    "AFChemPLC.ThoiGianCapLieu;ThoiGianCapLieu",
-    "AFChemPLC.ThoiGianTron1;ThoiGianTron1",
-    "AFChemPLC.ThoiGianXaDay;ThoiGianXaDay",
-    "AFChemPLC.ThoiGianRungXaDay;ThoiGianRungXaDay",
-    "AFChemPLC.ThoiGianHutXaDay;ThoiGianHutXaDay",
-    "AFChemPLC.ThoiGianTron2;ThoiGianTron2",
-    "AFChemPLC.ThoiGianXaHang;ThoiGianXaHang",
-    "AFChemPLC.ThoiGianRungXaHang;ThoiGianRungXaHang",
-    "AFChemPLC.NhietDoMay;NhietDoMay",
+    "AFChemTX01.ThoiGianCapLieu;ThoiGianCapLieu",
+    "AFChemTX01.ThoiGianTron1;ThoiGianTron1",
+    "AFChemTX01.ThoiGianXaDay;ThoiGianXaDay",
+    "AFChemTX01.ThoiGianRungXaDay;ThoiGianRungXaDay",
+    "AFChemTX01.ThoiGianHutXaDay;ThoiGianHutXaDay",
+    "AFChemTX01.ThoiGianTron2;ThoiGianTron2",
+    "AFChemTX01.ThoiGianXaHang;ThoiGianXaHang",
+    "AFChemTX01.ThoiGianRungXaHang;ThoiGianRungXaHang",
+    "AFChemTX01.NhietDoMay;NhietDoMay",
     // ... thêm các tag còn lại
-    "AFChemPLC.CongDoanMay;CongDoanMay"
+    "AFChemTX01.CongDoanMay;CongDoanMay"
 };
 
 // === RealtimeThresholdLogger ===
@@ -64,8 +64,8 @@ this.realtimeThresholdLogger1.DatabaseName = "scada";
 this.realtimeThresholdLogger1.TableName = "realtime_alarms";
 this.realtimeThresholdLogger1.ScanInterval = 3000;
 this.realtimeThresholdLogger1.Collection = new string[] {
-    "AFChemPLC.NhietDoMay;NhietDoMay;50;>",
-    "AFChemPLC.ApSuat;ApSuat;10;<"
+    "AFChemTX01.NhietDoMay;NhietDoMay;50;>",
+    "AFChemTX01.ApSuat;ApSuat;10;<"
 };
 ```
 
@@ -150,7 +150,7 @@ GROUP BY TagName;
 
 ```sql
 INSERT INTO alarmsettings (TagName, TagNo, Value, Location, Description, Type, Level, FaultCode)
-VALUES ('AFChemPLC.ThoiGianCapLieu', 'T001', '0', 'Mixer', 'Timer Cap Lieu', 2, 0, 0);
+VALUES ('AFChemTX01.ThoiGianCapLieu', 'T001', '0', 'Mixer', 'Timer Cap Lieu', 2, 0, 0);
 ```
 
 ### Kịch bản test
@@ -169,14 +169,14 @@ VALUES ('AFChemPLC.ThoiGianCapLieu', 'T001', '0', 'Mixer', 'Timer Cap Lieu', 2, 
 -- Xem alarm log mới nhất
 SELECT ID, TagName, TagNo, Status, OccurrenceTime, RestoreTime 
 FROM alarmlog 
-WHERE TagName = 'AFChemPLC.ThoiGianCapLieu'
+WHERE TagName = 'AFChemTX01.ThoiGianCapLieu'
 ORDER BY OccurrenceTime DESC 
 LIMIT 10;
 
 -- Đếm số bản ghi: phải = 1 cho mỗi chu kỳ
 SELECT COUNT(*) as SoBanGhi
 FROM alarmlog 
-WHERE TagName = 'AFChemPLC.ThoiGianCapLieu'
+WHERE TagName = 'AFChemTX01.ThoiGianCapLieu'
   AND OccurrenceTime >= DATE_SUB(NOW(), INTERVAL 10 MINUTE);
 ```
 

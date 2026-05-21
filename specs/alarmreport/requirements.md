@@ -34,9 +34,9 @@ Dựa trên quan sát dữ liệu thực tế:
 - **Đang chạy**: Suốt quá trình từ công đoạn 1 đến 5, Timer cứ +30s là đọc toàn bộ 17 thanh ghi và `INSERT` 1 dòng vào database.
 - **Kết thúc**: Việc ghi log của mẻ hiện tại sẽ kết thúc khi hoàn tất Công đoạn 5 (ví dụ: các thanh ghi xả hàng về 0). Hệ thống sẽ rơi vào trạng thái chờ (ngừng ghi) cho đến khi mẻ mới cấp liệu lại (`ThoiGianCapLieu > 0`).
 
-### 4. Định danh Máy bằng Tên Thiết Bị (Device Name - ví dụ: "AFChemPLC")
-- Như cấu trúc hệ thống, `TagName` đang được lưu dưới dạng `AFChemPLC.CongDoanMay`. Phần tiền tố **"AFChemPLC"** chính là Device Node đại diện cho cỗ máy trộn đó.
-- Cần có trường `DeviceName` (hoặc `MachineName`) trong database lưu giá trị này (ví dụ: `"AFChemPLC"`). Nhờ vậy, nếu sau này nhà máy có thêm cụm máy khác (ví dụ "AFChemPLC2"), dữ liệu báo cáo 17 thanh ghi sẽ được ghim chính xác cho từng cỗ máy dựa vào tên Device này, rất rõ ràng và chuẩn xác.
+### 4. Định danh Máy bằng Tên Thiết Bị (Device Name - ví dụ: "AFChemTX01")
+- Như cấu trúc hệ thống, `TagName` đang được lưu dưới dạng `AFChemTX01.CongDoanMay`. Phần tiền tố **"AFChemTX01"** chính là Device Node đại diện cho cỗ máy trộn đó.
+- Cần có trường `DeviceName` (hoặc `MachineName`) trong database lưu giá trị này (ví dụ: `"AFChemTX01"`). Nhờ vậy, nếu sau này nhà máy có thêm cụm máy khác (ví dụ "AFChemTX012"), dữ liệu báo cáo 17 thanh ghi sẽ được ghim chính xác cho từng cỗ máy dựa vào tên Device này, rất rõ ràng và chuẩn xác.
 
 ## 3. Phân tích bài toán cập nhật cho `alarmlog` (Cơ chế Event-driven)
 Cơ chế hiện hành của `alarmlog` đang có điểm bất cập khi xử lý các thanh ghi trả về giá trị liên tục (như bộ đếm thời gian). Nếu giá trị thanh ghi thay đổi (ví dụ: đếm từ 1, 2, 3...) hệ thống lại hiểu nhầm đó là các sự kiện mới, dẫn tới việc liên tục Resolve công đoạn cũ và Insert công đoạn mới.

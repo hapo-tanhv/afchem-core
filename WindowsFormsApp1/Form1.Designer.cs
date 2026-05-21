@@ -1,4 +1,4 @@
-﻿
+
 namespace WindowsFormsApp1
 {
     partial class Form1
@@ -75,24 +75,25 @@ namespace WindowsFormsApp1
             // alarmReportLogger1
             // 
             this.alarmReportLogger1.Collection = new string[] {
-        "AFChemPLC.QuyTrinh;QuyTrinh",
-        "AFChemPLC.CongDoanMay;CongDoanMay",
-        "AFChemPLC.ThoiGianCapLieu;ThoiGianCapLieu",
-        "AFChemPLC.ThoiGianTron1;ThoiGianTron1",
-        "AFChemPLC.ThoiGianXaDay;ThoiGianXaDay",
-        "AFChemPLC.ThoiGianHutXaDay;ThoiGianHutXaDay",
-        "AFChemPLC.ThoiGianTron2;ThoiGianTron2",
-        "AFChemPLC.ThoiGianRungXaDay;ThoiGianRungXaDay",
-        "AFChemPLC.ThoiGianXaHang;ThoiGianXaHang",
-        "AFChemPLC.ThoiGianRungXaHang;ThoiGianRungXaHang",
-        "AFChemPLC.ApSuat;ApSuat",
-        "AFChemPLC.NhietDoMoiTruong;NhietDoMoiTruong",
-        "AFChemPLC.DoAmMoiTruong;DoAmMoiTruong",
-        "AFChemPLC.NhietDoBonTronTren;NhietDoBonTronTren",
-        "AFChemPLC.NhietDoBonTronGiua;NhietDoBonTronGiua",
-        "AFChemPLC.NhietDoBonTronDuoi;NhietDoBonTronDuoi"};
+        "AFChemTX01.QuyTrinh;QuyTrinh",
+        "AFChemTX01.CongDoanMay;CongDoanMay",
+        "AFChemTX01.ThoiGianCapLieu;ThoiGianCapLieu",
+        "AFChemTX01.ThoiGianTron1;ThoiGianTron1",
+        "AFChemTX01.ThoiGianXaDay;ThoiGianXaDay",
+        "AFChemTX01.ThoiGianHutXaDay;ThoiGianHutXaDay",
+        "AFChemTX01.ThoiGianTron2;ThoiGianTron2",
+        "AFChemTX01.ThoiGianRungXaDay;ThoiGianRungXaDay",
+        "AFChemTX01.ThoiGianXaHang;ThoiGianXaHang",
+        "AFChemTX01.ThoiGianRungXaHang;ThoiGianRungXaHang",
+        "AFChemTX01.ApSuat;ApSuat",
+        "AFChemTX01.NhietDoMoiTruong;NhietDoMoiTruong",
+        "AFChemTX01.DoAmMoiTruong;DoAmMoiTruong",
+        "AFChemTX01.NhietDoBonTronTren;NhietDoBonTronTren",
+        "AFChemTX01.NhietDoBonTronGiua;NhietDoBonTronGiua",
+        "AFChemTX01.NhietDoBonTronDuoi;NhietDoBonTronDuoi"};
             this.alarmReportLogger1.DatabaseName = "scada";
             this.alarmReportLogger1.Driver = this.iDriver1;
+            this.alarmReportLogger1.HttpPort = 5500;
             this.alarmReportLogger1.Password = "101101";
             this.alarmReportLogger1.PollingInterval = 30000;
             this.alarmReportLogger1.ServerName = "localhost";
@@ -101,13 +102,19 @@ namespace WindowsFormsApp1
             // 
             // realtimeThresholdLogger1
             // 
+            this.realtimeThresholdLogger1.AlarmReportLogger = this.alarmReportLogger1;
             this.realtimeThresholdLogger1.Collection = new string[] {
-        "AFChemPLC.NhietDoMoiTruong;NhietDoMoiTruong;45;>",
-        "AFChemPLC.ApSuat;ApSuat;10;>",
-        "AFChemPLC.NhietDoBonTronGiua;NhietDoBonTronGiua;60;>",
-        "AFChemPLC.DoAmMoiTruong;DoAmMoiTruong;80;>",
-        "AFChemPLC.NhietDoBonTronDuoi;NhietDoBonTronDuoi;60;>",
-        "AFChemPLC.NhietDoBonTronTren;NhietDoBonTronTren;60;>"};
+        "AFChemTX01.NhietDoMoiTruong;NhietDoMoiTruong;45;>;WARNING;Nhiệt độ môi trường vượ" +
+            "t ngưỡng cảnh báo",
+        "AFChemTX01.ApSuat;ApSuat;10;>;ALARM;Áp suất hệ thống vượt ngưỡng nguy hiểm",
+        "AFChemTX01.NhietDoBonTronGiua;NhietDoBonTronGiua;40;>;WARNING;Nhiệt độ bồn trộn g" +
+            "iữa vượt ngưỡng cảnh báo",
+        "AFChemTX01.DoAmMoiTruong;DoAmMoiTruong;60;>;WARNING;Độ ẩm môi trường vượt ngưỡng " +
+            "cảnh báo",
+        "AFChemTX01.NhietDoBonTronDuoi;NhietDoBonTronDuoi;40;>;ALARM;Nhiệt độ bồn trộn dướ" +
+            "i quá cao",
+        "AFChemTX01.NhietDoBonTronTren;NhietDoBonTronTren;40;>;ALARM;Nhiệt độ bồn trộn trê" +
+            "n quá cao"};
             this.realtimeThresholdLogger1.DatabaseName = "scada";
             this.realtimeThresholdLogger1.Driver = this.iDriver1;
             this.realtimeThresholdLogger1.Password = "101101";

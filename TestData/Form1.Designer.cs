@@ -1,4 +1,4 @@
-﻿
+
 namespace TestData
 {
     partial class Form1
@@ -50,23 +50,23 @@ namespace TestData
             // alarmReportLogger1
             // 
             this.alarmReportLogger1.Collection = new string[] {
-        "AFChemPLC.NhietDoMay;NhietDoMay",
-        "AFChemPLC.NhietDoMoiTruong;NhietDoMoiTruong",
-        "AFChemPLC.ApSuat;ApSuat",
-        "AFChemPLC.QuyTrinh;QuyTrinh",
-        "AFChemPLC.CongDoanMay;CongDoanMay",
-        "AFChemPLC.NhietDoGiuaBuongTron;NhietDoGiuaBuongTron",
-        "AFChemPLC.DoAmMoiTruong;DoAmMoiTruong",
-        "AFChemPLC.ThoiGianCapLieu;ThoiGianCapLieu",
-        "AFChemPLC.ThoiGianTron1;ThoiGianTron1",
-        "AFChemPLC.ThoiGianXaDay;ThoiGianXaDay",
-        "AFChemPLC.ThoiGianHutXaDay;ThoiGianHutXaDay",
-        "AFChemPLC.ThoiGianTron2;ThoiGianTron2",
-        "AFChemPLC.ThoiGianRungXaDay;ThoiGianRungXaDay",
-        "AFChemPLC.ThoiGianXaHang;ThoiGianXaHang",
-        "AFChemPLC.ThoiGianRungXaHang;ThoiGianRungXaHang",
-        "AFChemPLC.NhietDoDayBuongTron;NhietDoDayBuongTron",
-        "AFChemPLC.NhietDoNapBuongTron;NhietDoNapBuongTron"};
+        "AFChemTX01.NhietDoMay;NhietDoMay",
+        "AFChemTX01.NhietDoMoiTruong;NhietDoMoiTruong",
+        "AFChemTX01.ApSuat;ApSuat",
+        "AFChemTX01.QuyTrinh;QuyTrinh",
+        "AFChemTX01.CongDoanMay;CongDoanMay",
+        "AFChemTX01.NhietDoGiuaBuongTron;NhietDoGiuaBuongTron",
+        "AFChemTX01.DoAmMoiTruong;DoAmMoiTruong",
+        "AFChemTX01.ThoiGianCapLieu;ThoiGianCapLieu",
+        "AFChemTX01.ThoiGianTron1;ThoiGianTron1",
+        "AFChemTX01.ThoiGianXaDay;ThoiGianXaDay",
+        "AFChemTX01.ThoiGianHutXaDay;ThoiGianHutXaDay",
+        "AFChemTX01.ThoiGianTron2;ThoiGianTron2",
+        "AFChemTX01.ThoiGianRungXaDay;ThoiGianRungXaDay",
+        "AFChemTX01.ThoiGianXaHang;ThoiGianXaHang",
+        "AFChemTX01.ThoiGianRungXaHang;ThoiGianRungXaHang",
+        "AFChemTX01.NhietDoDayBuongTron;NhietDoDayBuongTron",
+        "AFChemTX01.NhietDoNapBuongTron;NhietDoNapBuongTron"};
             this.alarmReportLogger1.DatabaseName = "scada";
             this.alarmReportLogger1.Driver = this.iDriver1;
             this.alarmReportLogger1.Password = "101101";
@@ -77,9 +77,10 @@ namespace TestData
             // 
             // realtimeThresholdLogger1
             // 
+            this.realtimeThresholdLogger1.AlarmReportLogger = this.alarmReportLogger1;
             this.realtimeThresholdLogger1.Collection = new string[] {
-        "AFChemPLC.NhietDoMay;NhietDoMay;50;>",
-        "AFChemPLC.ApSuat;ApSuat;10;<"};
+        "AFChemTX01.NhietDoMay;NhietDoMay;50;>;ALARM;Nhiệt độ máy vượt ngưỡng nguy hiểm",
+        "AFChemTX01.ApSuat;ApSuat;10;<;WARNING;Áp suất hệ thống thấp hơn mức an toàn"};
             this.realtimeThresholdLogger1.DatabaseName = "scada";
             this.realtimeThresholdLogger1.Driver = this.iDriver1;
             this.realtimeThresholdLogger1.Password = "101101";
@@ -116,7 +117,7 @@ namespace TestData
             this.iLabel1.Name = "iLabel1";
             this.iLabel1.Size = new System.Drawing.Size(41, 13);
             this.iLabel1.TabIndex = 0;
-            this.iLabel1.TagName = "AFChemPLC.ThoiGianCapLieu";
+            this.iLabel1.TagName = "AFChemTX01.ThoiGianCapLieu";
             this.iLabel1.Text = "iLabel1";
             // 
             // alarmHost1

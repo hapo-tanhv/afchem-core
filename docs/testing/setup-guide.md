@@ -35,7 +35,7 @@
 │       │        └──────────────┘                      │
 └───────┼──────────────────────────────────────────────┘
         │
-   SCADA PLC (AFChemPLC)
+   SCADA TX01 (AFChemTX01)
 ```
 
 **3 tính năng cần test:**
@@ -119,25 +119,25 @@ Chọn từng component ở Component Tray → mở **Properties Window** (`F4`)
 **Collection** — Nhấn nút `...` bên cạnh property → String Collection Editor → nhập mỗi dòng:
 
 ```
-AFChemPLC.QuyTrinh;QuyTrinh
-AFChemPLC.CongDoanMay;CongDoanMay
-AFChemPLC.ThoiGianCapLieu;ThoiGianCapLieu
-AFChemPLC.ThoiGianTron1;ThoiGianTron1
-AFChemPLC.ThoiGianXaDay;ThoiGianXaDay
-AFChemPLC.ThoiGianHutXaDay;ThoiGianHutXaDay
-AFChemPLC.ThoiGianTron2;ThoiGianTron2
-AFChemPLC.ThoiGianRungXaDay;ThoiGianRungXaDay
-AFChemPLC.ThoiGianXaHang;ThoiGianXaHang
-AFChemPLC.ThoiGianRungXaHang;ThoiGianRungXaHang
-AFChemPLC.ApSuat;ApSuat
-AFChemPLC.NhietDoMoiTruong;NhietDoMoiTruong
-AFChemPLC.DoAmMoiTruong;DoAmMoiTruong
-AFChemPLC.NhietDoBonTronTren;NhietDoBonTronTren
-AFChemPLC.NhietDoBonTronGiua;NhietDoBonTronGiua
-AFChemPLC.NhietDoBonTronDuoi;NhietDoBonTronDuoi
+AFChemTX01.QuyTrinh;QuyTrinh
+AFChemTX01.CongDoanMay;CongDoanMay
+AFChemTX01.ThoiGianCapLieu;ThoiGianCapLieu
+AFChemTX01.ThoiGianTron1;ThoiGianTron1
+AFChemTX01.ThoiGianXaDay;ThoiGianXaDay
+AFChemTX01.ThoiGianHutXaDay;ThoiGianHutXaDay
+AFChemTX01.ThoiGianTron2;ThoiGianTron2
+AFChemTX01.ThoiGianRungXaDay;ThoiGianRungXaDay
+AFChemTX01.ThoiGianXaHang;ThoiGianXaHang
+AFChemTX01.ThoiGianRungXaHang;ThoiGianRungXaHang
+AFChemTX01.ApSuat;ApSuat
+AFChemTX01.NhietDoMoiTruong;NhietDoMoiTruong
+AFChemTX01.DoAmMoiTruong;DoAmMoiTruong
+AFChemTX01.NhietDoBonTronTren;NhietDoBonTronTren
+AFChemTX01.NhietDoBonTronGiua;NhietDoBonTronGiua
+AFChemTX01.NhietDoBonTronDuoi;NhietDoBonTronDuoi
 ```
 
-> **Lưu ý:** Cần thay `AFChemPLC` bằng tên Device thực tế trong project ATSCADA của bạn. Các tên tag (sau dấu `.`) cũng phải khớp chính xác với tag đã cấu hình trong ATSCADA.
+> **Lưu ý:** Cần thay `AFChemTX01` bằng tên Device thực tế trong project ATSCADA của bạn. Các tên tag (sau dấu `.`) cũng phải khớp chính xác với tag đã cấu hình trong ATSCADA.
 
 ### 4.3. RealtimeThresholdLogger (realtimeThresholdLogger1)
 | Property | Giá trị | Ghi chú |
@@ -154,16 +154,16 @@ AFChemPLC.NhietDoBonTronDuoi;NhietDoBonTronDuoi
 **Collection** — Nhấn `...` → nhập mỗi dòng:
 
 ```
-AFChemPLC.NhietDoBonTronTren;NhietDoBonTronTren;50;>
-AFChemPLC.ApSuat;ApSuat;10;<
+AFChemTX01.NhietDoBonTronTren;NhietDoBonTronTren;50;>
+AFChemTX01.ApSuat;ApSuat;10;<
 ```
 
 **Format:** `TagName;Alias;Threshold;Operator`
 
 | Ví dụ | Ý nghĩa |
 |-------|---------|
-| `AFChemPLC.NhietDoBonTronTren;NhietDoBonTronTren;50;>` | Cảnh báo khi Nhiệt độ bồn trộn trên **> 50** |
-| `AFChemPLC.ApSuat;ApSuat;10;<` | Cảnh báo khi Áp suất **< 10** |
+| `AFChemTX01.NhietDoBonTronTren;NhietDoBonTronTren;50;>` | Cảnh báo khi Nhiệt độ bồn trộn trên **> 50** |
+| `AFChemTX01.ApSuat;ApSuat;10;<` | Cảnh báo khi Áp suất **< 10** |
 
 ### 4.4. AlarmServer (alarmServer1) — Cho test ContinuousAlarmTag
 | Property | Giá trị |
@@ -198,9 +198,9 @@ AFChemPLC.ApSuat;ApSuat;10;<
 INSERT INTO scada.alarmsettings 
   (TagName, TagNo, Value, Location, Description, Type, Level, FaultCode)
 VALUES 
-  ('AFChemPLC.ThoiGianCapLieu', 'T001', '0', 'Mixer', 'Timer Cấp Liệu', 2, 0, 0),
-  ('AFChemPLC.ThoiGianTron1', 'T002', '0', 'Mixer', 'Timer Trộn 1', 2, 0, 0),
-  ('AFChemPLC.ThoiGianRungXaHang', 'T008', '0', 'Mixer', 'Timer Rung Xả Hàng', 2, 0, 0);
+  ('AFChemTX01.ThoiGianCapLieu', 'T001', '0', 'Mixer', 'Timer Cấp Liệu', 2, 0, 0),
+  ('AFChemTX01.ThoiGianTron1', 'T002', '0', 'Mixer', 'Timer Trộn 1', 2, 0, 0),
+  ('AFChemTX01.ThoiGianRungXaHang', 'T008', '0', 'Mixer', 'Timer Rung Xả Hàng', 2, 0, 0);
 ```
 
 **Giải thích cột `Type`:**
@@ -219,7 +219,7 @@ VALUES
 
 ```
 Bước 1: Chạy TestData → Form1 hiển thị
-Bước 2: Trong ATSCADA (hoặc PLC), set ThoiGianCapLieu = 5
+Bước 2: Trong ATSCADA (hoặc TX01), set ThoiGianCapLieu = 5
         ✅ Kỳ vọng: State Machine chuyển sang Logging, QuyTrinh = 1
 Bước 3: Đợi 60 giây
         ✅ Kỳ vọng: Có 2-3 bản ghi trong bảng alarmreport

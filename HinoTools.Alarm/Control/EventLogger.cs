@@ -1,4 +1,4 @@
-﻿using HinoTools.Alarm.Database;
+using HinoTools.Alarm.Database;
 using HinoTools.Alarm.Model.Event;
 using System.ComponentModel;
 
@@ -36,7 +36,7 @@ namespace HinoTools.Alarm.Control
         public string UserID { get; set; } = "root";
 
         [Category("Hino Settings")]
-        public string Password { get; set; } = "100100";
+        public string Password { get; set; } = "101101";
 
         [Category("Hino Settings")]
         public string DatabaseName { get; set; } = "scada";
