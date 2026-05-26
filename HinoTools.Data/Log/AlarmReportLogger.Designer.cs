@@ -18,6 +18,10 @@ namespace HinoTools.Data.Log
             {
                 try { httpServer.Stop(); } catch { }
             }
+            if (disposing && webhookServer != null)
+            {
+                try { webhookServer.Stop(); } catch { }
+            }
             if (disposing && (components != null))
             {
                 components.Dispose();

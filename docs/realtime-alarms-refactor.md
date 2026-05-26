@@ -51,6 +51,7 @@ ALTER TABLE `realtime_alarms` ADD COLUMN `Severity` VARCHAR(50) NOT NULL DEFAULT
 - Expose các trường máy trạng thái dạng public: `CurrentCongDoan`, `CurrentQuyTrinh`, `ActiveBatchId`.
 - Viết thuộc tính `CurrentCongDoanName` để tự động chuyển đổi mã công đoạn (1-5) sang tên tiếng Việt thân thiện, bao gồm cả việc phát hiện tiểu công đoạn (ví dụ: "Rung xả đáy", "Hút xả đáy", "Rung xả hàng") dựa trên các thanh ghi phụ trợ.
 - Thêm cơ chế tự động ghi nhật ký `INFO` vào bảng `realtime_alarms` khi có sự thay đổi giữa các công đoạn.
+- **Tích hợp ghi nhận INFO cho tiểu công đoạn (T004, T005, T008)**: Trong hàm `PollAndLog()`, bổ sung logic quét giá trị các thanh ghi của tiểu công đoạn xả và xả hàng. Khi phát hiện các thanh ghi `ThoiGianRungXaDay` (>0), `ThoiGianHutXaDay` (>0), hoặc `ThoiGianRungXaHang` (>0) bắt đầu hoạt động, logger sẽ tự động ghi 1 dòng sự kiện `INFO` tương ứng với mã `T004`, `T005`, `T008` vào bảng `realtime_alarms` để đánh dấu bắt đầu chu trình con một cách đồng bộ.
 - **Bổ sung chặn trùng lặp INFO**: Tích hợp kiểm tra trùng lặp trong cùng một công đoạn của một mẻ (chỉ ghi tối đa 1 bản ghi `INFO` để tránh hiện tượng nhiễu tín hiệu lặp lại).
 
 ### [Cập nhật Cột restore_time & Tự động Đóng Cảnh báo]

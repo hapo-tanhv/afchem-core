@@ -70,22 +70,45 @@ Cả hai bảng đều được bổ sung tự động cột `batchId` dạng `I
 - **Body** (Tùy chọn):
 ```json
 {
-  "device_name": "TX01"
+  "device_name": "TX01",
+  "quantity": 4
 }
 ```
-*Lưu ý: Nếu không gửi body hoặc không cung cấp `device_name`, API sẽ mặc định sử dụng thiết bị là `"TX01"`.*
+*Lưu ý:*
+- Nếu không gửi body hoặc không cung cấp `device_name`, API sẽ mặc định sử dụng thiết bị là `"TX01"`.
+- Nếu không cung cấp `quantity` hoặc cung cấp nhỏ hơn 1, API sẽ mặc định tạo **4 mẻ trộn** cho máy `"TX01"`. Bạn cũng có thể truyền số lượng mong muốn qua thuộc tính `quantity` trong JSON hoặc tham số query string `?quantity=N`.
 
-- **Phản hồi Thành công (200 OK)**:
+- **Phản hồi Thành công (200 OK - Trả về danh sách mảng các mẻ mới tạo)**:
 ```json
 {
   "success": true,
-  "message": "Batch created successfully",
-  "data": {
-    "id": 15,
-    "name": "TX01-20260520-01",
-    "device_name": "TX01",
-    "status": "Pending"
-  }
+  "message": "4 batch(es) created successfully",
+  "data": [
+    {
+      "id": 15,
+      "name": "TX01-20260526-01",
+      "device_name": "TX01",
+      "status": "Pending"
+    },
+    {
+      "id": 16,
+      "name": "TX01-20260526-02",
+      "device_name": "TX01",
+      "status": "Pending"
+    },
+    {
+      "id": 17,
+      "name": "TX01-20260526-03",
+      "device_name": "TX01",
+      "status": "Pending"
+    },
+    {
+      "id": 18,
+      "name": "TX01-20260526-04",
+      "device_name": "TX01",
+      "status": "Pending"
+    }
+  ]
 }
 ```
 

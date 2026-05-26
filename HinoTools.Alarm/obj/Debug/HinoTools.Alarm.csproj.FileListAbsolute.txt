@@ -160,7 +160,7 @@ C:\Users\tanhv\Project\HinoTools.Alarm_27092023_Test\HinoTools.Alarm_27092023_Te
 C:\Users\tanhv\Project\HinoTools.Alarm_27092023_Test\HinoTools.Alarm_27092023_Test\HinoTools.Alarm\obj\Debug\HinoTools.Alarm.Control.EventViewer.resources
 C:\Users\tanhv\Project\HinoTools.Alarm_27092023_Test\HinoTools.Alarm_27092023_Test\HinoTools.Alarm\obj\Debug\HinoTools.Alarm.csproj.GenerateResource.cache
 C:\Users\tanhv\Project\HinoTools.Alarm_27092023_Test\HinoTools.Alarm_27092023_Test\HinoTools.Alarm\obj\Debug\HinoTools.Alarm.csproj.CoreCompileInputs.cache
+C:\Users\tanhv\Project\HinoTools.Alarm_27092023_Test\HinoTools.Alarm_27092023_Test\HinoTools.Alarm\obj\Debug\HinoTools.Alarm.csproj.CopyComplete
 C:\Users\tanhv\Project\HinoTools.Alarm_27092023_Test\HinoTools.Alarm_27092023_Test\HinoTools.Alarm\obj\Debug\HinoTools.Alarm.dll
 C:\Users\tanhv\Project\HinoTools.Alarm_27092023_Test\HinoTools.Alarm_27092023_Test\HinoTools.Alarm\obj\Debug\HinoTools.Alarm.pdb
 C:\Users\tanhv\Project\HinoTools.Alarm_27092023_Test\HinoTools.Alarm_27092023_Test\HinoTools.Alarm\obj\Debug\HinoTools.Alarm.csproj.AssemblyReference.cache
-C:\Users\tanhv\Project\HinoTools.Alarm_27092023_Test\HinoTools.Alarm_27092023_Test\HinoTools.Alarm\obj\Debug\HinoTools.Alarm.csproj.CopyComplete

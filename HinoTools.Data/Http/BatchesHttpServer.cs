@@ -163,8 +163,31 @@ namespace HinoTools.Data.Http
                         deviceName = DefaultDevice;
                     }
 
-                    string batchName = "";
-                    int batchId = 0;
+                    // Parse quantity (default is 4 for TX01, or generally when not specified)
+                    int quantity = 4;
+                    var quantityMatch = Regex.Match(body, "\"quantity\"\\s*:\\s*(\\d+)", RegexOptions.IgnoreCase);
+                    if (quantityMatch.Success)
+                    {
+                        if (int.TryParse(quantityMatch.Groups[1].Value, out int q))
+                        {
+                            quantity = q;
+                        }
+                    }
+                    else
+                    {
+                        var queryQuantity = request.QueryString["quantity"];
+                        if (!string.IsNullOrEmpty(queryQuantity) && int.TryParse(queryQuantity, out int q))
+                        {
+                            quantity = q;
+                        }
+                    }
+
+                    if (quantity < 1)
+                    {
+                        quantity = 1;
+                    }
+
+                    var createdBatches = new System.Collections.Generic.List<string>();
 
                     lock (dbLock)
                     {
@@ -200,31 +223,39 @@ namespace HinoTools.Data.Http
                                 }
                             }
 
-                            batchName = $"{deviceName}-{todayStr}-{nextStt:D2}";
-
-                            // 2. Insert new batch as Pending
-                            string insertQuery = "INSERT INTO `batches` (`name`, `device_name`, `status`, `created_at`) " +
-                                                "VALUES (@name, @device_name, 'Pending', NOW())";
-                            using (var cmd = new MySqlCommand(insertQuery, conn))
+                            // 2. Insert quantity number of batches sequentially
+                            for (int i = 0; i < quantity; i++)
                             {
-                                cmd.Parameters.AddWithValue("@name", batchName);
-                                cmd.Parameters.AddWithValue("@device_name", deviceName);
-                                cmd.ExecuteNonQuery();
-                                batchId = (int)cmd.LastInsertedId;
+                                int currentStt = nextStt + i;
+                                string batchName = $"{deviceName}-{todayStr}-{currentStt:D2}";
+
+                                string insertQuery = "INSERT INTO `batches` (`name`, `device_name`, `status`, `created_at`) " +
+                                                    "VALUES (@name, @device_name, 'Pending', NOW())";
+                                using (var cmd = new MySqlCommand(insertQuery, conn))
+                                {
+                                    cmd.Parameters.AddWithValue("@name", batchName);
+                                    cmd.Parameters.AddWithValue("@device_name", deviceName);
+                                    cmd.ExecuteNonQuery();
+                                    int insertedId = (int)cmd.LastInsertedId;
+
+                                    string itemJson = $"{{\n" +
+                                                       $"      \"id\": {insertedId},\n" +
+                                                       $"      \"name\": \"{batchName}\",\n" +
+                                                       $"      \"device_name\": \"{deviceName}\",\n" +
+                                                       $"      \"status\": \"Pending\"\n" +
+                                                       $"    }}";
+                                    createdBatches.Add(itemJson);
+                                }
                             }
                         }
                     }
 
-                    // 3. Send Success JSON Response
+                    // 3. Send Success JSON Response with list of created batches
+                    string dataArrayJson = string.Join(",\n", createdBatches);
                     string jsonResponse = $"{{\n" +
                                           $"  \"success\": true,\n" +
-                                          $"  \"message\": \"Batch created successfully\",\n" +
-                                          $"  \"data\": {{\n" +
-                                          $"    \"id\": {batchId},\n" +
-                                          $"    \"name\": \"{batchName}\",\n" +
-                                          $"    \"device_name\": \"{deviceName}\",\n" +
-                                          $"    \"status\": \"Pending\"\n" +
-                                          $"  }}\n" +
+                                          $"  \"message\": \"{quantity} batch(es) created successfully\",\n" +
+                                          $"  \"data\": [\n{dataArrayJson}\n  ]\n" +
                                           $"}}";
 
                     SendJsonResponse(response, HttpStatusCode.OK, jsonResponse);

@@ -43,6 +43,7 @@ namespace HinoTools.Data.Log
 
         // Batches and API fields
         private HinoTools.Data.Http.BatchesHttpServer httpServer;
+        private HinoTools.Data.Http.WebhookHttpServer webhookServer;
         private int? activeBatchId = null;
 
         private DateTime lastAlarmReportTime = DateTime.MinValue;
@@ -148,6 +149,14 @@ namespace HinoTools.Data.Log
         [Description("HTTP Server API Port (default: 5500).")]
         public int HttpPort { get; set; } = 5500;
 
+        [Category("Hino Settings")]
+        [Description("Webhook HTTP Server API Port (default: 5600).")]
+        public int WebhookPort { get; set; } = 5600;
+
+        [Category("Hino Settings")]
+        [Description("Webhook Secret Security Token.")]
+        public string WebhookToken { get; set; } = "HinoWebhookSecretToken2026";
+
         private string[] _collection;
 
         [Category("Hino Settings")]
@@ -219,6 +228,17 @@ namespace HinoTools.Data.Log
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] HTTP Server start FAILED: {ex.Message}");
+            }
+
+            // Start Webhook HTTP Server
+            try
+            {
+                webhookServer = new HinoTools.Data.Http.WebhookHttpServer(GetConnectionStringWithDb(), WebhookPort, WebhookToken);
+                webhookServer.Start();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] Webhook HTTP Server start FAILED: {ex.Message}");
             }
 
             tmrLog = new System.Timers.Timer();
@@ -307,6 +327,16 @@ namespace HinoTools.Data.Log
 
                 if (currentCongDoan == 3)
                 {
+                    double thoiGianRungXaDay = GetTagValueByAlias("ThoiGianRungXaDay");
+                    if (thoiGianRungXaDay > 0)
+                    {
+                        InsertRealtimeInfoEvent("T004", "Bắt đầu rung xả đáy");
+                    }
+                    if (thoiGianHutXa > 0)
+                    {
+                        InsertRealtimeInfoEvent("T005", "Bắt đầu hút xả đáy");
+                    }
+
                     if (thoiGianHutXa > 0) hasThoiGianHutXaStarted = true;
                     if (hasThoiGianHutXaStarted && thoiGianHutXa == 0)
                     {
@@ -327,6 +357,11 @@ namespace HinoTools.Data.Log
 
                 if (currentCongDoan == 5)
                 {
+                    if (thoiGianRungXaHang > 0)
+                    {
+                        InsertRealtimeInfoEvent("T008", "Bắt đầu rung xả hàng");
+                    }
+
                     if (thoiGianRungXaHang > 0) hasThoiGianRungXaHangStarted = true;
                     if (thoiGianXaHang > 0) hasThoiGianXaHangStarted = true;
 

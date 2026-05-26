@@ -28,9 +28,9 @@ namespace HinoTools.Alarm.Model
 
         protected DateTime lastOccurrenceTime = DateTime.MinValue;
 
-        private volatile bool isBusy;
+        protected volatile bool isBusy;
 
-        private DateTime timeStamp;
+        protected DateTime timeStamp;
 
         #endregion
 
@@ -242,6 +242,7 @@ namespace HinoTools.Alarm.Model
             var value = this.tag.Value;
             if (string.IsNullOrEmpty(value)) return;
 
+            this.timeStamp = DateTime.Now; // Update timestamp when tag value changes
             CheckCondition(value, true);
         }
 
@@ -264,6 +265,7 @@ namespace HinoTools.Alarm.Model
                 // Value is 0: restore alarm (> 0 -> 0)
                 // OffAlarm internally guards with: if (Status == NORMAL) return;
                 OffAlarm(allowNotifyAlarm);
+                this.isBusy = false; // Reset isBusy when value returns to 0
             }
         }
     }

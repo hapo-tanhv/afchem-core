@@ -160,13 +160,23 @@ namespace HinoTools.Alarm.Control
             return "TX01";
         }
 
-        private int? GetActiveBatchId(string deviceName)
+        private int? GetActiveBatchId(string deviceName, bool isNewBatchStart = false)
         {
-            WriteDebugLog(string.Format("[GetActiveBatchId] Start query for device: '{0}'", deviceName));
+            WriteDebugLog(string.Format("[GetActiveBatchId] Start query for device: '{0}', isNewBatchStart: {1}", deviceName, isNewBatchStart));
             try
             {
                 this.dataAccess.ConnectionString = $"Server={ServerName};Uid={UserID};Pwd={Password}; Database={DatabaseName}";
                 
+                if (isNewBatchStart)
+                {
+                    // Force complete any currently Active batches for this device first to prevent race condition
+                    string completeQuery = $"UPDATE `batches` " +
+                                           $"SET `status` = 'Completed', `end_time` = '{DateTime.Now:yyyy-MM-dd HH:mm:ss}' " +
+                                           $"WHERE `device_name` = '{deviceName}' AND `status` = 'Active'";
+                    WriteDebugLog(string.Format("[GetActiveBatchId] Force completing active batches due to new batch start: {0}", completeQuery));
+                    this.dataAccess.ExecuteNonQuery(completeQuery);
+                }
+
                 // 1. Try to find the Active batch first
                 string query = $"SELECT `id` FROM `batches` WHERE `device_name` = '{deviceName}' AND `status` = 'Active' ORDER BY `id` DESC LIMIT 1";
                 WriteDebugLog(string.Format("[GetActiveBatchId] Query 1 (Active): {0}", query));
@@ -263,7 +273,9 @@ namespace HinoTools.Alarm.Control
                 }
 
                 string deviceName = ExtractDeviceName(alarmItem.Param.TagName);
-                int? batchId = GetActiveBatchId(deviceName);
+                bool isNewBatchStart = alarmItem.Param.TagName.EndsWith("ThoiGianCapLieu", StringComparison.OrdinalIgnoreCase) 
+                                       && alarmItem.Status == AlarmStatus.ALARM;
+                int? batchId = GetActiveBatchId(deviceName, isNewBatchStart);
                 string batchIdValue = batchId.HasValue ? batchId.Value.ToString() : "null";
 
                 var query = $"insert into {TableName} " +

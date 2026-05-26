@@ -55,6 +55,7 @@
     <Compile Include="Database\DataAccess.cs" />
     <Compile Include="Helper\DeviceNameHelper.cs" />
     <Compile Include="Http\BatchesHttpServer.cs" />
+    <Compile Include="Http\WebhookHttpServer.cs" />
     <Compile Include="Database\DatabaseParam.cs" />
     <Compile Include="Log\AlarmReportLogger.cs">
       <SubType>Component</SubType>

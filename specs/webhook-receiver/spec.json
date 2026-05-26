@@ -1,0 +1,48 @@
+{
+  "feature_name": "webhook-receiver",
+  "created_at": "2026-05-26T16:03:00+07:00",
+  "updated_at": "2026-05-26T16:07:00+07:00",
+  "language": "vi",
+  "phase": "completed",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "approved": true
+    },
+    "design": {
+      "generated": true,
+      "approved": true
+    },
+    "tasks": {
+      "generated": true,
+      "approved": true
+    }
+  },
+  "scope_lock": {
+    "source": "Tôi cần thiết kế 1 API nhận webhook. Mục đích là để 1 hệ thống base sẽ gắn webhook của tôi vào hệ thống của họ, khi bên họ trigger event, ví dụ như bắt đầu mẻ, thì bên tôi sẽ nhận được thông tin trả về.",
+    "in_scope": [
+      "Tự host một HTTP Webhook Server sử dụng HttpListener trong background thread của ứng dụng .NET 4.5 hiện tại.",
+      "Xác thực tính hợp lệ của request qua header X-Webhook-Token.",
+      "Lưu trữ raw JSON payload bất đồng bộ vào bảng database MySQL mới `webhook_logs` sử dụng component DataAccess sẵn có.",
+      "Phản hồi nhanh HTTP 200 OK cho hệ thống gửi để tránh timeout."
+    ],
+    "out_of_scope": [
+      "Phân tích cú pháp chi tiết nội dung JSON payload sang các model C# nghiệp vụ cụ thể.",
+      "Xây dựng cơ chế gọi ngược lại hệ thống base.",
+      "Triển khai HTTPS/SSL trực tiếp trong mã nguồn C# (khuyên dùng Reverse Proxy như Nginx/IIS ở mức hạ tầng để xử lý SSL)."
+    ],
+    "expansion_policy": "requires-user-approval"
+  },
+  "design_context": {
+    "discovery_mode": "full",
+    "discovery_reason": "New subsystem containing custom HttpListener server, token authentication, and asynchronous MySQL logging.",
+    "validation_recommended": true
+  },
+  "validation": {
+    "status": "completed",
+    "session_count": 1,
+    "questions_asked": 4,
+    "last_validated_at": "2026-05-26T16:07:00+07:00"
+  },
+  "ready_for_implementation": true
+}

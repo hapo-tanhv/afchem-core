@@ -1,0 +1,8 @@
+[2026-05-26 16:17:14] Error starting fallback Webhook server: Failed to listen on prefix 'http://127.0.0.1:5600/' because it conflicts with an existing registration on the machine.
+[2026-05-26 16:23:09] Error starting fallback Webhook server: Access is denied
+[2026-05-26 16:23:12] Error starting fallback Webhook server: Access is denied
+[2026-05-26 16:23:56] Error starting fallback Webhook server: Access is denied
+[2026-05-26 16:23:59] Error starting fallback Webhook server: Access is denied
+[2026-05-26 16:26:11] Error starting fallback Webhook server: Access is denied
+[2026-05-26 16:26:14] Error starting fallback Webhook server: Access is denied
+[2026-05-26 16:32:55] Error starting Webhook server: Failed to listen on prefix 'http://*:5600/' because it conflicts with an existing registration on the machine.

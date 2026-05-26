@@ -211,8 +211,11 @@ C:\Users\tanhv\Project\HinoTools.Alarm_27092023_Test\HinoTools.Alarm_27092023_Te
 C:\Users\tanhv\Project\HinoTools.Alarm_27092023_Test\HinoTools.Alarm_27092023_Test\TestData\bin\Debug\HinoTools.Alarm.dll
 C:\Users\tanhv\Project\HinoTools.Alarm_27092023_Test\HinoTools.Alarm_27092023_Test\TestData\bin\Debug\HinoTools.Data.dll
 C:\Users\tanhv\Project\HinoTools.Alarm_27092023_Test\HinoTools.Alarm_27092023_Test\TestData\bin\Debug\iDriver.dll
+C:\Users\tanhv\Project\HinoTools.Alarm_27092023_Test\HinoTools.Alarm_27092023_Test\TestData\bin\Debug\iTools.dll
+C:\Users\tanhv\Project\HinoTools.Alarm_27092023_Test\HinoTools.Alarm_27092023_Test\TestData\bin\Debug\MySql.Data.dll
 C:\Users\tanhv\Project\HinoTools.Alarm_27092023_Test\HinoTools.Alarm_27092023_Test\TestData\bin\Debug\ToolExtensions.dll
 C:\Users\tanhv\Project\HinoTools.Alarm_27092023_Test\HinoTools.Alarm_27092023_Test\TestData\bin\Debug\DriverPluginInterface.dll
+C:\Users\tanhv\Project\HinoTools.Alarm_27092023_Test\HinoTools.Alarm_27092023_Test\TestData\bin\Debug\ZedGraph.dll
 C:\Users\tanhv\Project\HinoTools.Alarm_27092023_Test\HinoTools.Alarm_27092023_Test\TestData\bin\Debug\HinoTools.Alarm.pdb
 C:\Users\tanhv\Project\HinoTools.Alarm_27092023_Test\HinoTools.Alarm_27092023_Test\TestData\bin\Debug\HinoTools.Data.pdb
 C:\Users\tanhv\Project\HinoTools.Alarm_27092023_Test\HinoTools.Alarm_27092023_Test\TestData\obj\Debug\TestData.csproj.AssemblyReference.cache
@@ -220,9 +223,6 @@ C:\Users\tanhv\Project\HinoTools.Alarm_27092023_Test\HinoTools.Alarm_27092023_Te
 C:\Users\tanhv\Project\HinoTools.Alarm_27092023_Test\HinoTools.Alarm_27092023_Test\TestData\obj\Debug\TestData.Properties.Resources.resources
 C:\Users\tanhv\Project\HinoTools.Alarm_27092023_Test\HinoTools.Alarm_27092023_Test\TestData\obj\Debug\TestData.csproj.GenerateResource.cache
 C:\Users\tanhv\Project\HinoTools.Alarm_27092023_Test\HinoTools.Alarm_27092023_Test\TestData\obj\Debug\TestData.csproj.CoreCompileInputs.cache
+C:\Users\tanhv\Project\HinoTools.Alarm_27092023_Test\HinoTools.Alarm_27092023_Test\TestData\obj\Debug\TestData.csproj.CopyComplete
 C:\Users\tanhv\Project\HinoTools.Alarm_27092023_Test\HinoTools.Alarm_27092023_Test\TestData\obj\Debug\TestData.exe
 C:\Users\tanhv\Project\HinoTools.Alarm_27092023_Test\HinoTools.Alarm_27092023_Test\TestData\obj\Debug\TestData.pdb
-C:\Users\tanhv\Project\HinoTools.Alarm_27092023_Test\HinoTools.Alarm_27092023_Test\TestData\bin\Debug\iTools.dll
-C:\Users\tanhv\Project\HinoTools.Alarm_27092023_Test\HinoTools.Alarm_27092023_Test\TestData\bin\Debug\ZedGraph.dll
-C:\Users\tanhv\Project\HinoTools.Alarm_27092023_Test\HinoTools.Alarm_27092023_Test\TestData\bin\Debug\MySql.Data.dll
-C:\Users\tanhv\Project\HinoTools.Alarm_27092023_Test\HinoTools.Alarm_27092023_Test\TestData\obj\Debug\TestData.csproj.CopyComplete
