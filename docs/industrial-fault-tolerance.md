@@ -228,9 +228,10 @@ public partial class Form1 : Form
 Phương án chuẩn công nghiệp và an toàn nhất để khởi động phần mềm SCADA WinForms cùng driver kết nối PLC là cho phép Windows tự động đăng nhập vào tài khoản User vận hành và chạy app trực tiếp trong Session đó.
 
 1.  **Cấu hình Windows Auto-Login:**
-    *   Sử dụng công cụ chính chủ Microsoft Sysinternals **`Autologon`** hoặc cấu hình Registry để Windows tự động đăng nhập khi bật máy:
-        *   Đường dẫn Registry: `HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon`
-        *   Đặt `AutoAdminLogon` = `1`, nhập đúng `DefaultUserName` và `DefaultPassword` của máy trạm.
+    *   Mở PowerShell bằng quyền Administrator.
+    *   Chạy tệp script bằng lệnh sau:
+       powershell -ExecutionPolicy Bypass -File "C:\Users\tanhv\Project\HinoTools.Alarm_27092023_Test\HinoTools.Alarm_27092023_Test\scratch\setup_autologin.ps1" 
+    *   Nhập Username và Mật khẩu theo hướng dẫn trên màn hình. Script sẽ tự động chỉnh sửa Registry an toàn để kích hoạt Auto-Login.
 2.  **Khởi động qua thư mục Startup của User (Session 1):**
     *   Nhấn `Win + R` -> gõ `shell:startup` và nhấn Enter. Thư mục khởi chạy của người dùng hiện tại sẽ xuất hiện.
     *   Tạo Shortcut của tệp tin `WindowsFormsApp1.exe` và kéo vào thư mục này.
