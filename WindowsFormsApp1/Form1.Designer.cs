@@ -99,6 +99,8 @@ namespace WindowsFormsApp1
             this.alarmReportLogger1.ServerName = "localhost";
             this.alarmReportLogger1.TableName = "alarmreport";
             this.alarmReportLogger1.UserID = "root";
+            this.alarmReportLogger1.WebhookPort = 5600;
+            this.alarmReportLogger1.WebhookToken = "HinoWebhookSecretToken2026";
             // 
             // realtimeThresholdLogger1
             // 
@@ -130,6 +132,7 @@ namespace WindowsFormsApp1
             this.ClientSize = new System.Drawing.Size(1043, 450);
             this.Name = "Form1";
             this.Text = "Form1";
+            this.Load += new System.EventHandler(this.Form1_Load);
             this.ResumeLayout(false);
 
         }
