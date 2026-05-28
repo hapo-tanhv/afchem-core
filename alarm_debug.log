@@ -3562,3 +3562,93 @@
 2026-05-28 14:53:58.615 [GetActiveBatchId] Found Active Batch ID: 2
 2026-05-28 14:53:58.615 [InsertAlarm] Executing query: insert into alarmlog (`ID`, `OccurrenceTime`, `RestoreTime`, `TagName`, `TagNo`, `Location`, `Description`, `Status`, `FaultCode`, `batchId`) values ('3c9263e2-09ed-4385-8979-96b059eb2b1f', '2026-05-28 14:53:58', null, 'AFChemTX01.ThoiGianTron1', 'T002', 'Mixer', 'Timer Trộn 1', 'Alarm',0,2) on duplicate key update `RestoreTime` = values(`RestoreTime`), `Status` = values(`Status`) 
 2026-05-28 14:53:58.617 [InsertAlarm] Execution success. Rows affected: 1
+2026-05-28 15:08:42.973 [InsertAlarm] Start for ID: '3c9263e2-09ed-4385-8979-96b059eb2b1f', TagName: 'AFChemTX01.ThoiGianTron1', Status: 'NORMAL'
+2026-05-28 15:08:42.973 [ExtractDeviceName] Input TagName: 'AFChemTX01.ThoiGianTron1'
+2026-05-28 15:08:42.973 [ExtractDeviceName] Extracted: 'TX01' from prefix 'AFChemTX01'
+2026-05-28 15:08:42.973 [GetActiveBatchId] Start query for device: 'TX01', isNewBatchStart: False
+2026-05-28 15:08:42.973 [GetActiveBatchId] Query 1 (Active): SELECT `id` FROM `batches` WHERE `device_name` = 'TX01' AND `status` = 'Active' ORDER BY `id` DESC LIMIT 1
+2026-05-28 15:08:42.974 [GetActiveBatchId] Result 1: 2
+2026-05-28 15:08:42.974 [GetActiveBatchId] Found Active Batch ID: 2
+2026-05-28 15:08:42.974 [InsertAlarm] Executing query: insert into alarmlog (`ID`, `OccurrenceTime`, `RestoreTime`, `TagName`, `TagNo`, `Location`, `Description`, `Status`, `FaultCode`, `batchId`) values ('3c9263e2-09ed-4385-8979-96b059eb2b1f', '2026-05-28 14:53:58', '2026-05-28 15:08:42', 'AFChemTX01.ThoiGianTron1', 'T002', 'Mixer', 'Timer Trộn 1', 'Resolved',0,2) on duplicate key update `RestoreTime` = values(`RestoreTime`), `Status` = values(`Status`) 
+2026-05-28 15:08:42.976 [InsertAlarm] Execution success. Rows affected: 2
+2026-05-28 15:08:43.045 [InsertAlarm] Start for ID: '9572ef4d-4924-46eb-a801-9ffee4e57a67', TagName: 'AFChemTX01.ThoiGianXaDay', Status: 'ALARM'
+2026-05-28 15:08:43.046 [ExtractDeviceName] Input TagName: 'AFChemTX01.ThoiGianXaDay'
+2026-05-28 15:08:43.046 [ExtractDeviceName] Extracted: 'TX01' from prefix 'AFChemTX01'
+2026-05-28 15:08:43.046 [GetActiveBatchId] Start query for device: 'TX01', isNewBatchStart: False
+2026-05-28 15:08:43.046 [GetActiveBatchId] Query 1 (Active): SELECT `id` FROM `batches` WHERE `device_name` = 'TX01' AND `status` = 'Active' ORDER BY `id` DESC LIMIT 1
+2026-05-28 15:08:43.047 [GetActiveBatchId] Result 1: 2
+2026-05-28 15:08:43.047 [GetActiveBatchId] Found Active Batch ID: 2
+2026-05-28 15:08:43.047 [InsertAlarm] Executing query: insert into alarmlog (`ID`, `OccurrenceTime`, `RestoreTime`, `TagName`, `TagNo`, `Location`, `Description`, `Status`, `FaultCode`, `batchId`) values ('9572ef4d-4924-46eb-a801-9ffee4e57a67', '2026-05-28 15:08:43', null, 'AFChemTX01.ThoiGianXaDay', 'T003', 'Mixer', 'Timer Xả Đáy', 'Alarm',0,2) on duplicate key update `RestoreTime` = values(`RestoreTime`), `Status` = values(`Status`) 
+2026-05-28 15:08:43.048 [InsertAlarm] Execution success. Rows affected: 1
+2026-05-28 15:08:43.049 [InsertAlarm] Start for ID: 'e4a88397-50d8-43ca-af97-3233b572b219', TagName: 'AFChemTX01.ThoiGianRungXaDay', Status: 'ALARM'
+2026-05-28 15:08:43.049 [ExtractDeviceName] Input TagName: 'AFChemTX01.ThoiGianRungXaDay'
+2026-05-28 15:08:43.050 [ExtractDeviceName] Extracted: 'TX01' from prefix 'AFChemTX01'
+2026-05-28 15:08:43.050 [GetActiveBatchId] Start query for device: 'TX01', isNewBatchStart: False
+2026-05-28 15:08:43.050 [GetActiveBatchId] Query 1 (Active): SELECT `id` FROM `batches` WHERE `device_name` = 'TX01' AND `status` = 'Active' ORDER BY `id` DESC LIMIT 1
+2026-05-28 15:08:43.050 [GetActiveBatchId] Result 1: 2
+2026-05-28 15:08:43.051 [GetActiveBatchId] Found Active Batch ID: 2
+2026-05-28 15:08:43.051 [InsertAlarm] Executing query: insert into alarmlog (`ID`, `OccurrenceTime`, `RestoreTime`, `TagName`, `TagNo`, `Location`, `Description`, `Status`, `FaultCode`, `batchId`) values ('e4a88397-50d8-43ca-af97-3233b572b219', '2026-05-28 15:08:43', null, 'AFChemTX01.ThoiGianRungXaDay', 'T004', 'Mixer', 'Timer Rung Xả Đáy', 'Alarm',0,2) on duplicate key update `RestoreTime` = values(`RestoreTime`), `Status` = values(`Status`) 
+2026-05-28 15:08:43.052 [InsertAlarm] Execution success. Rows affected: 1
+2026-05-28 15:08:43.053 [InsertAlarm] Start for ID: 'a3d6413d-35a0-4a7e-a590-dd6ed2e3cf67', TagName: 'AFChemTX01.ThoiGianHutXaDay', Status: 'ALARM'
+2026-05-28 15:08:43.053 [ExtractDeviceName] Input TagName: 'AFChemTX01.ThoiGianHutXaDay'
+2026-05-28 15:08:43.054 [ExtractDeviceName] Extracted: 'TX01' from prefix 'AFChemTX01'
+2026-05-28 15:08:43.054 [GetActiveBatchId] Start query for device: 'TX01', isNewBatchStart: False
+2026-05-28 15:08:43.054 [GetActiveBatchId] Query 1 (Active): SELECT `id` FROM `batches` WHERE `device_name` = 'TX01' AND `status` = 'Active' ORDER BY `id` DESC LIMIT 1
+2026-05-28 15:08:43.054 [GetActiveBatchId] Result 1: 2
+2026-05-28 15:08:43.055 [GetActiveBatchId] Found Active Batch ID: 2
+2026-05-28 15:08:43.055 [InsertAlarm] Executing query: insert into alarmlog (`ID`, `OccurrenceTime`, `RestoreTime`, `TagName`, `TagNo`, `Location`, `Description`, `Status`, `FaultCode`, `batchId`) values ('a3d6413d-35a0-4a7e-a590-dd6ed2e3cf67', '2026-05-28 15:08:43', null, 'AFChemTX01.ThoiGianHutXaDay', 'T005', 'Mixer', 'Timer Hút Xả Đáy', 'Alarm',0,2) on duplicate key update `RestoreTime` = values(`RestoreTime`), `Status` = values(`Status`) 
+2026-05-28 15:08:43.056 [InsertAlarm] Execution success. Rows affected: 1
+2026-05-28 15:08:57.436 [InsertAlarm] Start for ID: 'e4a88397-50d8-43ca-af97-3233b572b219', TagName: 'AFChemTX01.ThoiGianRungXaDay', Status: 'NORMAL'
+2026-05-28 15:08:57.436 [ExtractDeviceName] Input TagName: 'AFChemTX01.ThoiGianRungXaDay'
+2026-05-28 15:08:57.436 [ExtractDeviceName] Extracted: 'TX01' from prefix 'AFChemTX01'
+2026-05-28 15:08:57.436 [GetActiveBatchId] Start query for device: 'TX01', isNewBatchStart: False
+2026-05-28 15:08:57.436 [GetActiveBatchId] Query 1 (Active): SELECT `id` FROM `batches` WHERE `device_name` = 'TX01' AND `status` = 'Active' ORDER BY `id` DESC LIMIT 1
+2026-05-28 15:08:57.437 [GetActiveBatchId] Result 1: 2
+2026-05-28 15:08:57.437 [GetActiveBatchId] Found Active Batch ID: 2
+2026-05-28 15:08:57.438 [InsertAlarm] Executing query: insert into alarmlog (`ID`, `OccurrenceTime`, `RestoreTime`, `TagName`, `TagNo`, `Location`, `Description`, `Status`, `FaultCode`, `batchId`) values ('e4a88397-50d8-43ca-af97-3233b572b219', '2026-05-28 15:08:43', '2026-05-28 15:08:57', 'AFChemTX01.ThoiGianRungXaDay', 'T004', 'Mixer', 'Timer Rung Xả Đáy', 'Resolved',0,2) on duplicate key update `RestoreTime` = values(`RestoreTime`), `Status` = values(`Status`) 
+2026-05-28 15:08:57.439 [InsertAlarm] Execution success. Rows affected: 2
+2026-05-28 15:16:58.487 [InsertAlarm] Start for ID: '9572ef4d-4924-46eb-a801-9ffee4e57a67', TagName: 'AFChemTX01.ThoiGianXaDay', Status: 'NORMAL'
+2026-05-28 15:16:58.487 [ExtractDeviceName] Input TagName: 'AFChemTX01.ThoiGianXaDay'
+2026-05-28 15:16:58.487 [ExtractDeviceName] Extracted: 'TX01' from prefix 'AFChemTX01'
+2026-05-28 15:16:58.488 [GetActiveBatchId] Start query for device: 'TX01', isNewBatchStart: False
+2026-05-28 15:16:58.488 [GetActiveBatchId] Query 1 (Active): SELECT `id` FROM `batches` WHERE `device_name` = 'TX01' AND `status` = 'Active' ORDER BY `id` DESC LIMIT 1
+2026-05-28 15:16:58.488 [GetActiveBatchId] Result 1: 2
+2026-05-28 15:16:58.489 [GetActiveBatchId] Found Active Batch ID: 2
+2026-05-28 15:16:58.489 [InsertAlarm] Executing query: insert into alarmlog (`ID`, `OccurrenceTime`, `RestoreTime`, `TagName`, `TagNo`, `Location`, `Description`, `Status`, `FaultCode`, `batchId`) values ('9572ef4d-4924-46eb-a801-9ffee4e57a67', '2026-05-28 15:08:43', '2026-05-28 15:16:58', 'AFChemTX01.ThoiGianXaDay', 'T003', 'Mixer', 'Timer Xả Đáy', 'Resolved',0,2) on duplicate key update `RestoreTime` = values(`RestoreTime`), `Status` = values(`Status`) 
+2026-05-28 15:16:58.491 [InsertAlarm] Execution success. Rows affected: 2
+2026-05-28 15:18:29.004 [InsertAlarm] Start for ID: 'a3d6413d-35a0-4a7e-a590-dd6ed2e3cf67', TagName: 'AFChemTX01.ThoiGianHutXaDay', Status: 'NORMAL'
+2026-05-28 15:18:29.005 [ExtractDeviceName] Input TagName: 'AFChemTX01.ThoiGianHutXaDay'
+2026-05-28 15:18:29.006 [ExtractDeviceName] Extracted: 'TX01' from prefix 'AFChemTX01'
+2026-05-28 15:18:29.007 [GetActiveBatchId] Start query for device: 'TX01', isNewBatchStart: False
+2026-05-28 15:18:29.008 [GetActiveBatchId] Query 1 (Active): SELECT `id` FROM `batches` WHERE `device_name` = 'TX01' AND `status` = 'Active' ORDER BY `id` DESC LIMIT 1
+2026-05-28 15:18:29.011 [GetActiveBatchId] Result 1: 2
+2026-05-28 15:18:29.012 [GetActiveBatchId] Found Active Batch ID: 2
+2026-05-28 15:18:29.012 [InsertAlarm] Executing query: insert into alarmlog (`ID`, `OccurrenceTime`, `RestoreTime`, `TagName`, `TagNo`, `Location`, `Description`, `Status`, `FaultCode`, `batchId`) values ('a3d6413d-35a0-4a7e-a590-dd6ed2e3cf67', '2026-05-28 15:08:43', '2026-05-28 15:18:29', 'AFChemTX01.ThoiGianHutXaDay', 'T005', 'Mixer', 'Timer Hút Xả Đáy', 'Resolved',0,2) on duplicate key update `RestoreTime` = values(`RestoreTime`), `Status` = values(`Status`) 
+2026-05-28 15:18:29.016 [InsertAlarm] Execution success. Rows affected: 2
+2026-05-28 15:18:29.030 [InsertAlarm] Start for ID: '87d622f0-de0f-4068-8c56-a394243412ab', TagName: 'AFChemTX01.ThoiGianTron2', Status: 'ALARM'
+2026-05-28 15:18:29.030 [ExtractDeviceName] Input TagName: 'AFChemTX01.ThoiGianTron2'
+2026-05-28 15:18:29.030 [ExtractDeviceName] Extracted: 'TX01' from prefix 'AFChemTX01'
+2026-05-28 15:18:29.030 [GetActiveBatchId] Start query for device: 'TX01', isNewBatchStart: False
+2026-05-28 15:18:29.031 [GetActiveBatchId] Query 1 (Active): SELECT `id` FROM `batches` WHERE `device_name` = 'TX01' AND `status` = 'Active' ORDER BY `id` DESC LIMIT 1
+2026-05-28 15:18:29.031 [GetActiveBatchId] Result 1: 2
+2026-05-28 15:18:29.031 [GetActiveBatchId] Found Active Batch ID: 2
+2026-05-28 15:18:29.032 [InsertAlarm] Executing query: insert into alarmlog (`ID`, `OccurrenceTime`, `RestoreTime`, `TagName`, `TagNo`, `Location`, `Description`, `Status`, `FaultCode`, `batchId`) values ('87d622f0-de0f-4068-8c56-a394243412ab', '2026-05-28 15:18:29', null, 'AFChemTX01.ThoiGianTron2', 'T006', 'Mixer', 'Timer Trộn 2', 'Alarm',0,2) on duplicate key update `RestoreTime` = values(`RestoreTime`), `Status` = values(`Status`) 
+2026-05-28 15:18:29.033 [InsertAlarm] Execution success. Rows affected: 1
+2026-05-28 15:38:01.323 [InsertAlarm] Start for ID: '87d622f0-de0f-4068-8c56-a394243412ab', TagName: 'AFChemTX01.ThoiGianTron2', Status: 'NORMAL'
+2026-05-28 15:38:01.325 [ExtractDeviceName] Input TagName: 'AFChemTX01.ThoiGianTron2'
+2026-05-28 15:38:01.326 [ExtractDeviceName] Extracted: 'TX01' from prefix 'AFChemTX01'
+2026-05-28 15:38:01.327 [GetActiveBatchId] Start query for device: 'TX01', isNewBatchStart: False
+2026-05-28 15:38:01.328 [GetActiveBatchId] Query 1 (Active): SELECT `id` FROM `batches` WHERE `device_name` = 'TX01' AND `status` = 'Active' ORDER BY `id` DESC LIMIT 1
+2026-05-28 15:38:01.329 [GetActiveBatchId] Result 1: 2
+2026-05-28 15:38:01.330 [GetActiveBatchId] Found Active Batch ID: 2
+2026-05-28 15:38:01.330 [InsertAlarm] Executing query: insert into alarmlog (`ID`, `OccurrenceTime`, `RestoreTime`, `TagName`, `TagNo`, `Location`, `Description`, `Status`, `FaultCode`, `batchId`) values ('87d622f0-de0f-4068-8c56-a394243412ab', '2026-05-28 15:18:29', '2026-05-28 15:38:01', 'AFChemTX01.ThoiGianTron2', 'T006', 'Mixer', 'Timer Trộn 2', 'Resolved',0,2) on duplicate key update `RestoreTime` = values(`RestoreTime`), `Status` = values(`Status`) 
+2026-05-28 15:38:01.331 [InsertAlarm] Execution success. Rows affected: 2
+2026-05-28 15:38:01.416 [InsertAlarm] Start for ID: '8efb5aa3-7231-4657-aed9-f74d49c1d175', TagName: 'AFChemTX01.ThoiGianXaHang', Status: 'ALARM'
+2026-05-28 15:38:01.416 [ExtractDeviceName] Input TagName: 'AFChemTX01.ThoiGianXaHang'
+2026-05-28 15:38:01.416 [ExtractDeviceName] Extracted: 'TX01' from prefix 'AFChemTX01'
+2026-05-28 15:38:01.417 [GetActiveBatchId] Start query for device: 'TX01', isNewBatchStart: False
+2026-05-28 15:38:01.417 [GetActiveBatchId] Query 1 (Active): SELECT `id` FROM `batches` WHERE `device_name` = 'TX01' AND `status` = 'Active' ORDER BY `id` DESC LIMIT 1
+2026-05-28 15:38:01.417 [GetActiveBatchId] Result 1: 2
+2026-05-28 15:38:01.418 [GetActiveBatchId] Found Active Batch ID: 2
+2026-05-28 15:38:01.418 [InsertAlarm] Executing query: insert into alarmlog (`ID`, `OccurrenceTime`, `RestoreTime`, `TagName`, `TagNo`, `Location`, `Description`, `Status`, `FaultCode`, `batchId`) values ('8efb5aa3-7231-4657-aed9-f74d49c1d175', '2026-05-28 15:38:01', null, 'AFChemTX01.ThoiGianXaHang', 'T007', 'Mixer', 'Timer Xả Hàng', 'Alarm',0,2) on duplicate key update `RestoreTime` = values(`RestoreTime`), `Status` = values(`Status`) 
+2026-05-28 15:38:01.419 [InsertAlarm] Execution success. Rows affected: 1
