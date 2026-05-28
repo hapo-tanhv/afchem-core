@@ -26,7 +26,7 @@ namespace WindowsFormsApp1
         {
             trayMenu = new ContextMenuStrip();
             
-            var showMenuItem = new ToolStripMenuItem("Hiển thị giao diện");
+            var showMenuItem = new ToolStripMenuItem("View");
             showMenuItem.Click += (s, e) => {
                 this.Show();
                 this.WindowState = FormWindowState.Normal;
@@ -36,7 +36,7 @@ namespace WindowsFormsApp1
             
             trayMenu.Items.Add(new ToolStripSeparator());
             
-            var exitMenuItem = new ToolStripMenuItem("Thoát hoàn toàn (Admin)");
+            var exitMenuItem = new ToolStripMenuItem("Exit");
             exitMenuItem.Click += MenuExit_Click;
             trayMenu.Items.Add(exitMenuItem);
 
