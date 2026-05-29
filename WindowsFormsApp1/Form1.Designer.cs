@@ -100,7 +100,7 @@ namespace WindowsFormsApp1
             this.alarmReportLogger1.TableName = "alarmreport";
             this.alarmReportLogger1.UserID = "root";
             this.alarmReportLogger1.WebhookPort = 5600;
-            this.alarmReportLogger1.WebhookToken = "HinoWebhookSecretToken2026";
+            this.alarmReportLogger1.WebhookToken = "wh_tok_2f8d9b1e4c7a6e5b3d2c1f0a9e8d7c6b";
             // 
             // realtimeThresholdLogger1
             // 

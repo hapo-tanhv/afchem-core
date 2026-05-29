@@ -155,7 +155,7 @@ namespace HinoTools.Data.Log
 
         [Category("Hino Settings")]
         [Description("Webhook Secret Security Token.")]
-        public string WebhookToken { get; set; } = "HinoWebhookSecretToken2026";
+        public string WebhookToken { get; set; } = "wh_tok_2f8d9b1e4c7a6e5b3d2c1f0a9e8d7c6b";
 
         private string[] _collection;
 

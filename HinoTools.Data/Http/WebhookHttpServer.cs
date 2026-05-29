@@ -18,7 +18,7 @@ namespace HinoTools.Data.Http
 
         public bool IsRunning => isRunning;
 
-        public WebhookHttpServer(string connectionString, int port = 5600, string token = "HinoWebhookSecretToken2026")
+        public WebhookHttpServer(string connectionString, int port = 5600, string token = "wh_tok_2f8d9b1e4c7a6e5b3d2c1f0a9e8d7c6b")
         {
             this.connectionString = connectionString;
             this.serverPort = port;
@@ -157,11 +157,16 @@ namespace HinoTools.Data.Http
                         return;
                     }
 
-                    // Xác thực Token bảo mật qua Header X-Webhook-Token
+                    // Xác thực Token bảo mật qua Header X-Webhook-Token hoặc Query Parameter (?token=...)
                     string requestToken = request.Headers["X-Webhook-Token"];
+                    if (string.IsNullOrEmpty(requestToken))
+                    {
+                        requestToken = request.QueryString["token"];
+                    }
+
                     if (string.IsNullOrEmpty(requestToken) || requestToken != securityToken)
                     {
-                        string errorJson = "{\n  \"success\": false,\n  \"message\": \"Unauthorized. Invalid or missing X-Webhook-Token\"\n}";
+                        string errorJson = "{\n  \"success\": false,\n  \"message\": \"Unauthorized. Invalid or missing webhook token.\"\n}";
                         SendJsonResponse(response, HttpStatusCode.Unauthorized, errorJson);
                         return;
                     }
