@@ -1,166 +1,127 @@
-# Tài liệu tổng kết: Module Quản lý Mẻ (Batches) và HTTP API
-Tài liệu này tổng hợp toàn bộ các thay đổi, cấu trúc cơ sở dữ liệu, các API Endpoint và hướng dẫn kiểm thử cho tính năng Quản lý mẻ trộn (`batches`).
+# Tài liệu tổng kết nâng cấp: Mô hình Lô (Batch) - Mẻ sản xuất (Run) (1-N) và Tích hợp HTTP API
+
+Tài liệu này tổng hợp toàn bộ các thay đổi kiến trúc, cấu trúc cơ sở dữ liệu, các điểm cuối API nâng cấp, và hướng dẫn vận hành cho mô hình **1 Batch (Lô) chứa nhiều Mẻ sản xuất (Run)** hoạt động độc lập.
 
 ---
 
-## 1. Các thành phần đã triển khai (Implemented Components)
+## 1. Kiến trúc nâng cấp Lô - Mẻ con (Batch - Run 1-N)
 
-Chúng tôi đã xây dựng và tích hợp thành công các thành phần sau:
-
-### 1.1. Lớp Helper Tách Tên Thiết Bị Động (`DeviceNameHelper.cs`)
-- **Đường dẫn**: `HinoTools.Data/Helper/DeviceNameHelper.cs`
-- **Mục đích**: Tách động tên thiết bị từ tag name SCADA. Loại bỏ các tiền tố như `AFChem` và các hậu tố theo ký tự `.`.
-- **Ví dụ**:
-  - `AFChemTX01.ThoiGianCapLieu` ➔ `TX01`
-  - `AFChemPLC` ➔ `PLC`
-  - `AFChemTX02.NhietDo` ➔ `TX02`
-
-### 1.2. Self-hosted HTTP API Server (`BatchesHttpServer.cs`)
-- **Đường dẫn**: `HinoTools.Data/Http/BatchesHttpServer.cs`
-- **Mục đích**: Chạy một server HTTP lắng nghe cổng `5500` độc lập để tiếp nhận yêu cầu từ bên thứ ba.
-- **Tính năng**:
-  - Hỗ trợ CORS tự động (cho phép các ứng dụng Web bên ngoài gọi API).
-  - Tự động sinh mã số thứ tự `stt` và tên mẻ tăng dần trong ngày theo định dạng: `device_name-yyyyMMdd-stt` (đảm bảo không trùng lặp và an toàn đa luồng thông qua cơ chế lock DB).
-  - Chèn mẻ trộn ở trạng thái `Pending` vào bảng `batches`.
-  - Hỗ trợ phản hồi OPTIONS (Pre-flight requests) cho các cuộc gọi từ trình duyệt.
-
-### 1.3. Cập nhật State Machine trong `AlarmReportLogger.cs`
-- **Đường dẫn**: `HinoTools.Data/Log/AlarmReportLogger.cs`
-- **Tính năng mới**:
-  - **Khởi chạy HTTP Server**: Tự động tạo và chạy `BatchesHttpServer` trên cổng `HttpPort` (mặc định là `5500`) khi component được khởi tạo (`TryInitialize`). Tự động tắt server khi giải phóng component (`Dispose`).
-  - **Auto-Migration**: Tự động tạo bảng `batches` nếu chưa tồn tại, và tự động kiểm tra, bổ sung cột `batchId` vào bảng `alarmreport`.
-  - **Logic FIFO**: Khi phát hiện ThoiGianCapLieu > 0 (bắt đầu mẻ), tự động tìm kiếm mẻ ở trạng thái `Pending` cũ nhất của thiết bị đó để cập nhật thành `Active` và lưu ID mẻ vào bộ nhớ (`activeBatchId`). Nếu không có mẻ `Pending` nào, tự động tạo một mẻ khẩn cấp/fallback làm mẻ hoạt động.
-  - **Liên kết Báo cáo**: Chèn ID mẻ hoạt động (`activeBatchId`) vào cột `batchId` khi ghi nhận dữ liệu định kỳ vào bảng `alarmreport`.
-  - **Hoàn thành mẻ trộn**: Khi `ThoiGianXaHang == 0` và `ThoiGianRungXaHang == 0` (kết thúc Công đoạn 5), tự động cập nhật trạng thái mẻ trộn đó thành `Completed` và gán thời gian kết thúc `end_time = DateTime.Now`.
-
-### 1.4. Cập nhật Báo cáo Cảnh báo Lỗi trong `AlarmLogger.cs`
-- **Đường dẫn**: `HinoTools.Alarm/Control/AlarmLogger.cs`
-- **Tính năng mới**:
-  - **Auto-Migration**: Tự động kiểm tra và thêm cột `batchId` vào bảng `alarmlog`.
-  - **Liên kết Cảnh báo**: Khi hệ thống ghi nhận một cảnh báo lỗi mới thông qua sự kiện `alarmHub.Pushed`, logger sẽ tách tên thiết bị động từ `TagName` của cảnh báo đó, truy vấn tìm mẻ trộn đang ở trạng thái `Active` hiện tại của thiết bị, và chèn ID mẻ vào cột `batchId` của bản ghi cảnh báo.
+Theo yêu cầu mới từ khách hàng, hệ thống đã được tái cấu trúc hoàn toàn để tách biệt khái niệm **Lô sản xuất (Batch)** và **Mẻ sản xuất (Run)**:
+- **Lô sản xuất (`batches`)**: Đại diện cho một lệnh sản xuất tổng thể (ví dụ: chạy Lô A gồm 2 mẻ con: mẻ 1 chạy sáng, mẻ 2 chạy chiều).
+- **Mẻ sản xuất (`runs`)**: Đại diện cho một chu kỳ chạy thực tế gồm **8 công đoạn** của PLC (Cấp liệu ➔ Trộn 1 ➔ Xả đáy ➔ Rung xả đáy ➔ Hút xả đáy ➔ Trộn 2 ➔ Xả hàng ➔ Rung xả hàng).
+- **Giao diện 2 cấp**: Hỗ trợ bộ lọc hai cấp độ trực quan (Chọn Lô ➔ Chọn Mẻ con). Mặc định luôn tự động chọn mẻ con mới nhất trong Lô để hiển thị báo cáo và biểu đồ chất lượng.
 
 ---
 
-## 2. Thiết kế Cơ sở dữ liệu (Database Design)
+## 2. Thiết kế Cơ sở dữ liệu nâng cấp (Database Design)
 
-### 2.1. Cấu trúc bảng `batches`
-Bảng này quản lý thông tin toàn bộ mẻ trộn:
+Cấu trúc cơ sở dữ liệu đã được bổ sung cơ chế tự động nâng cấp (Auto-Migration) và đảm bảo an toàn dữ liệu lịch sử.
+
+### 2.1. Cấu trúc bảng `runs` (Bảng mới quản lý Mẻ con)
+Bảng này lưu vết thời gian chạy và trạng thái của từng Mẻ con trong một Lô sản xuất:
 ```sql
-CREATE TABLE IF NOT EXISTS `batches` (
+CREATE TABLE IF NOT EXISTS `runs` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
-  `name` VARCHAR(100) NOT NULL UNIQUE,
-  `device_name` VARCHAR(100) NOT NULL,
+  `batch_id` INT NOT NULL,
+  `run_number` INT NOT NULL,
+  `name` VARCHAR(150) NOT NULL UNIQUE,
   `status` VARCHAR(50) NOT NULL DEFAULT 'Pending',
   `start_time` DATETIME NULL,
   `end_time` DATETIME NULL,
-  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (`batch_id`) REFERENCES `batches`(`id`) ON DELETE CASCADE,
+  INDEX `idx_runs_batch` (`batch_id`),
+  INDEX `idx_runs_status` (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 ```
 
-### 2.2. Nâng cấp các bảng `alarmreport` và `alarmlog`
-Cả hai bảng đều được bổ sung tự động cột `batchId` dạng `INT NULL DEFAULT NULL` làm khóa ngoại mềm tham chiếu đến bảng `batches.id`.
+### 2.2. Nâng cấp bảng `batches` (Lô sản xuất)
+Thêm cột `total_runs` kiểu `INT NOT NULL DEFAULT 1` đại diện cho số mẻ sản xuất đã được khai báo trước cho Lô đó.
+
+### 2.3. Nâng cấp các bảng log (`alarmreport`, `alarmlog`, `realtime_alarms`)
+Thêm cột `runId` kiểu `INT NULL DEFAULT NULL` làm khóa ngoại mềm trỏ tới bảng `runs(id)` để phân tách chính xác log của từng mẻ con. Giữ lại `batchId` để duy trì khả năng tương thích ngược và hỗ trợ truy vấn báo cáo theo cả 2 cấp độ.
+
+### 2.4. Tự động Di chuyển dữ liệu cũ (Historical Migration)
+Để đảm bảo hệ thống cũ chạy mượt mà ngay sau khi nâng cấp:
+1. Hệ thống tự động tạo 1 mẻ mặc định (`run_number = 1`, tên dạng `{batch_name}-Run01`) trong bảng `runs` cho mỗi lô cũ chưa có mẻ con.
+2. Cập nhật lại cột `runId` của các bản ghi sự cố và báo cáo cũ dựa trên liên kết `batchId` sẵn có.
 
 ---
 
-## 3. Hướng dẫn sử dụng API (API Specification)
+## 3. Hướng dẫn sử dụng HTTP API nâng cấp (HTTP API Specification)
 
-### 3.1. Yêu cầu tạo mẻ trộn mới
-- **Endpoint**: `POST http://localhost:5500/api/batches/create`
-- **Headers**: `Content-Type: application/json`
-- **Body** (Tùy chọn):
-```json
-{
-  "device_name": "TX01",
-  "quantity": 4
-}
-```
-*Lưu ý:*
-- Nếu không gửi body hoặc không cung cấp `device_name`, API sẽ mặc định sử dụng thiết bị là `"TX01"`.
-- Nếu không cung cấp `quantity` hoặc cung cấp nhỏ hơn 1, API sẽ mặc định tạo **4 mẻ trộn** cho máy `"TX01"`. Bạn cũng có thể truyền số lượng mong muốn qua thuộc tính `quantity` trong JSON hoặc tham số query string `?quantity=N`.
+Server HTTP tự lưu trữ (Self-hosted HTTP Server) chạy ngầm trên cổng `5500` đã được mở rộng thêm các API phục vụ giao diện lọc 2 cấp độ.
 
-- **Phản hồi Thành công (200 OK - Trả về danh sách mảng các mẻ mới tạo)**:
-```json
-{
-  "success": true,
-  "message": "4 batch(es) created successfully",
-  "data": [
-    {
-      "id": 15,
-      "name": "TX01-20260526-01",
-      "device_name": "TX01",
-      "status": "Pending"
-    },
-    {
-      "id": 16,
-      "name": "TX01-20260526-02",
-      "device_name": "TX01",
-      "status": "Pending"
-    },
-    {
-      "id": 17,
-      "name": "TX01-20260526-03",
-      "device_name": "TX01",
-      "status": "Pending"
-    },
-    {
-      "id": 18,
-      "name": "TX01-20260526-04",
-      "device_name": "TX01",
-      "status": "Pending"
-    }
-  ]
-}
-```
+### 3.1. API Tạo Batch và các Mẻ con: `POST /api/batches/create`
+API này chấp nhận khai báo trước số lượng mẻ sản xuất trong lô:
+- **Body Input (JSON)**:
+  ```json
+  {
+    "device_name": "TX01",
+    "runs_count": 2
+  }
+  ```
+- **Response thành công (200 OK - Trả về chi tiết Lô và các Mẻ Pending được sinh sẵn)**:
+  ```json
+  {
+    "success": true,
+    "message": "1 batch(es) created successfully with 2 run(s) each",
+    "data": [
+      {
+        "id": 12,
+        "name": "TX01-20260601-01",
+        "device_name": "TX01",
+        "status": "Pending",
+        "total_runs": 2,
+        "runs": [
+          {
+            "id": 24,
+            "run_number": 1,
+            "name": "TX01-20260601-01-Run01",
+            "status": "Pending"
+          },
+          {
+            "id": 25,
+            "run_number": 2,
+            "name": "TX01-20260601-01-Run02",
+            "status": "Pending"
+          }
+        ]
+      }
+    ]
+  }
+  ```
 
-- **Phản hồi Lỗi (500 Internal Server Error)**:
-```json
-{
-  "success": false,
-  "message": "Chi tiết thông báo lỗi..."
-}
-```
+### 3.2. API Lấy danh sách Lô: `GET /api/batches`
+Lấy danh sách các lô sản xuất của thiết bị phục vụ dropdown cấp 1:
+- **Query Params**: `device_name` (Lọc theo máy), `limit` (Mặc định 50).
+- **Response**: Trả về danh sách Lô kèm thời gian bắt đầu, kết thúc của lô và tổng số mẻ `total_runs`.
+
+### 3.3. API Lấy danh sách Mẻ thuộc Lô: `GET /api/runs`
+Lấy toàn bộ các mẻ sản xuất thuộc về một lô cụ thể phục vụ dropdown cấp 2:
+- **Query Params**: `batch_id` (Bắt buộc).
+- **Response**: Trả về danh sách các Mẻ con kèm theo thời gian start-end của từng mẻ cụ thể.
 
 ---
 
-## 4. Kịch bản Kiểm thử & Xác minh (Verification Plan)
+## 4. Vòng đời Lô - Mẻ trong mã nguồn (Workflow & State Machine)
 
-### 4.1. Chạy thử nghiệm tự động qua PowerShell
-Chúng tôi đã chuẩn bị sẵn một script kiểm thử tại: `C:\Users\tanhv\.gemini\antigravity\brain\6ce710a2-aeea-45cc-a9c6-69fa2e04c80a\scratch\test_api.ps1`.
+Hành vi giám sát tự động của hệ thống được cập nhật đồng bộ ở cả `AlarmReportLogger.cs` và `AlarmLogger.cs`:
 
-**Cách thực hiện**:
-1. Khởi chạy ứng dụng SCADA Host (ví dụ: `WindowsFormsApp1.exe`). Khi Form chính mở lên, `AlarmReportLogger` sẽ tự động khởi động HTTP Server trên cổng 5500.
-2. Mở PowerShell và chạy script kiểm thử:
-   ```powershell
-   & "C:\Users\tanhv\.gemini\antigravity\brain\6ce710a2-aeea-45cc-a9c6-69fa2e04c80a\scratch\test_api.ps1"
-   ```
-3. Script sẽ kiểm tra:
-   - Tạo mẻ mặc định.
-   - Tạo mẻ cho thiết bị `TX01`.
-   - Tạo mẻ cho thiết bị `TX02` (xác minh tên mẻ sinh tăng dần tự động: `TX02-20260520-01`).
-   - Kiểm tra OPTIONS Pre-flight request.
+### 4.1. Kích hoạt Mẻ theo FIFO (First-In, First-Out)
+Khi SCADA phát hiện mẻ bắt đầu chạy (`ThoiGianCapLieu > 0` và đang ở `Idle`):
+1. Hệ thống quét cơ sở dữ liệu tìm mẻ `Pending` cũ nhất của thiết bị đó.
+2. Cập nhật trạng thái mẻ con đó thành `Active`, lưu ID mẻ vào `activeRunId` trong bộ nhớ.
+3. Nếu Batch cha của mẻ này đang ở trạng thái `Pending` (chưa chạy mẻ nào trước đó): Cập nhật Batch cha thành `Active` và lưu ID Lô vào `activeBatchId` trong bộ nhớ, gán `start_time` cho Lô.
+4. **Cơ chế Tự khắc phục (Fallback)**: Nếu bên thứ ba chưa tạo mẻ qua API mà PLC đã chạy, hệ thống tự động sinh 1 Lô khẩn cấp (`total_runs = 1`) và 1 Mẻ khẩn cấp tương ứng làm `Active` để đảm bảo dữ liệu ghi log alarmlog và alarmreport không bao giờ bị gián đoạn.
 
-### 4.2. Kiểm tra chu kỳ hoạt động trong Database
-Khi mô phỏng chạy SCADA PLC thực tế:
-1. **Bước 1**: Gửi POST tạo mẻ trộn cho `TX01` ➔ Nhận về mẻ `TX01-20260520-01` (Trạng thái `Pending`).
-2. **Bước 2**: Khi tag `ThoiGianCapLieu` nhảy lên `> 0` ➔ Hệ thống tự động chuyển trạng thái mẻ trộn thành `Active` và lưu `start_time = DateTime.Now`.
-3. **Bước 3**: Khi có cảnh báo lỗi xảy ra trên tag (ví dụ: `AFChemTX01.ThoiGianCapLieu` nhảy lên `16`) ➔ `AlarmLogger` nhận sự kiện, tách tên thiết bị (mặc định là `TX01` nếu tag không chứa tiền tố thiết bị hợp lệ) và thực hiện truy vấn `GetActiveBatchId`. Nếu chưa có mẻ `Active` nào, nó tự động kích hoạt mẻ `Pending` cũ nhất (FIFO) hoặc tự tạo mẻ khẩn cấp `Active` mới. Tiếp theo ghi nhận lỗi vào bảng `alarmlog` kèm theo `batchId` hợp lệ đã được truy vết/tạo lập.
-4. **Bước 4**: Định kỳ 30 giây, dữ liệu báo cáo mẻ trộn được ghi vào `alarmreport` kèm theo `batchId` tương ứng.
-5. **Bước 5**: Khi các tag công đoạn chuyển tiếp đến bước 5, và cả hai tag `ThoiGianXaHang` cùng `ThoiGianRungXaHang` đều quay trở về `0` ➔ Hệ thống tự động chuyển trạng thái mẻ trộn thành `Completed` và lưu `end_time = DateTime.Now`.
-6. **Bước 6 (Khôi phục cảnh báo)**: Khi tag trở về `0`, hệ thống thực hiện `ON DUPLICATE KEY UPDATE` cập nhật trạng thái dòng alarm thành `Resolved` (hoặc `Restored`) và giữ nguyên giá trị `batchId` ban đầu để tránh sai lệch dữ liệu sự kiện.
+### 4.2. Ghi log liên kết đa cấp độ
+Trong suốt 8 công đoạn chạy của mẻ con, mọi bản ghi chèn định kỳ vào `alarmreport` hoặc chèn sự cố vượt ngưỡng tức thời vào `realtime_alarms` đều được điền tự động giá trị cột `batchId` = `activeBatchId` và cột `runId` = `activeRunId`.
 
----
-
-## 5. Các cải tiến kỹ thuật chống race condition và trùng lặp mẻ (Cập nhật 21/05/2026)
-
-Để tránh hiện tượng cột `batchId` bị `NULL` và khắc phục triệt để lỗi race condition tạo thêm mẻ `Active` trùng lặp khi hai luồng khởi động cùng lúc, chúng tôi đã nâng cấp logic xử lý ở cả hai đầu như sau:
-
-### 5.1. Nâng cấp trong `AlarmLogger.cs` (Luồng Cảnh báo Realtime)
-1. **Trích xuất Tên Thiết Bị Mềm dẻo**: `ExtractDeviceName` được cải tiến để nếu không thể nhận diện định dạng `AFChem[DeviceName].[TagName]` thì sẽ mặc định trả về `"TX01"` thay vì trả về prefix thô như trước, phù hợp với thực tế vận hành 1 máy.
-2. **Kích hoạt mẻ Pending (FIFO)**: Khi tìm kiếm `GetActiveBatchId`, nếu không có mẻ `Active` nào, logger sẽ tìm mẻ `Pending` cũ nhất (FIFO) của thiết bị đó trong DB, tự động chuyển nó sang `Active` (với `start_time` hiện tại) và sử dụng ID này.
-3. **Mẻ khẩn cấp (Emergency Fallback)**: Nếu hoàn toàn không có mẻ nào (cả `Active` và `Pending`) trong cơ sở dữ liệu, logger sẽ tự động tạo ra một mẻ khẩn cấp với trạng thái `Active`, đặt tên tự động theo cấu trúc chuẩn `<DeviceName>-<yyyyMMdd>-<stt>` và trả về ID của mẻ đó để tránh `batchId` bị `NULL` trong mọi trường hợp.
-
-### 5.2. Nâng cấp trong `AlarmReportLogger.cs` (Luồng Báo cáo 30s)
-1. **Khóa Liên Kết Active Có Sẵn**: Tại hàm `LinkOrCreateActiveBatch`, trước khi tìm mẻ `Pending` hay cố gắng tạo mẻ khẩn cấp mới, hệ thống sẽ thực hiện truy vấn kiểm tra xem trong cơ sở dữ liệu **đã có mẻ nào đang ở trạng thái `Active` cho thiết bị này chưa**.
-2. **Loại bỏ Trùng lặp**: Nếu đã tồn tại mẻ `Active` (được luồng alarm kích hoạt trước đó hoặc bởi tiến trình song song khác), luồng 30s sẽ trực tiếp liên kết đến ID mẻ hoạt động đó (`activeBatchId = ID_Active`), giữ nguyên `start_time` đồng bộ và kết thúc hàm ngay lập tức mà không tạo thêm bất kỳ bản ghi nào mới.
-
-
+### 4.3. Đóng Mẻ sản xuất & Hoàn thành Lô
+Khi mẻ xả hàng hoàn tất (Công đoạn 8 kết thúc, các tag rung và xả về `0`):
+1. Cập nhật mẻ con hiện tại thành `Completed` và gán thời gian `end_time`.
+2. Truy vấn đếm số mẻ chưa `Completed` trong Lô cha hiện hành.
+3. **Trường hợp tất cả mẻ con đã hoàn thành**: Cập nhật trạng thái Lô cha (`batches`) thành `Completed` và lưu `end_time` cho Lô.
+4. **Trường hợp vẫn còn mẻ con chưa chạy**: Giữ nguyên Lô là `Active` để chờ mẻ tiếp theo.
+5. Giải phóng các biến ID trong bộ nhớ và quay lại trạng thái `Idle` chờ mẻ tiếp theo.

@@ -348,6 +348,7 @@ namespace HinoTools.Data.Log
                     "`QuyTrinh` INT NOT NULL DEFAULT 0, " +
                     "`CongDoan` VARCHAR(100) NOT NULL DEFAULT '', " +
                     "`batchId` INT NULL DEFAULT NULL, " +
+                    "`runId` INT NULL DEFAULT NULL, " +
                     "`Severity` VARCHAR(50) NOT NULL DEFAULT 'ALARM', " +
                     "`restore_time` DATETIME NULL DEFAULT NULL" +
                     ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;";
@@ -356,11 +357,12 @@ namespace HinoTools.Data.Log
                 if (!success) return false;
 
                 // Add columns just in case the table existed without them
-                string[] checkCols = { "QuyTrinh", "CongDoan", "batchId", "Severity", "restore_time" };
+                string[] checkCols = { "QuyTrinh", "CongDoan", "batchId", "runId", "Severity", "restore_time" };
                 string[] alterSqls = {
                     $"ALTER TABLE `{TableName}` ADD COLUMN `QuyTrinh` INT NOT NULL DEFAULT 0",
                     $"ALTER TABLE `{TableName}` ADD COLUMN `CongDoan` VARCHAR(100) NOT NULL DEFAULT ''",
                     $"ALTER TABLE `{TableName}` ADD COLUMN `batchId` INT NULL DEFAULT NULL",
+                    $"ALTER TABLE `{TableName}` ADD COLUMN `runId` INT NULL DEFAULT NULL AFTER `batchId`",
                     $"ALTER TABLE `{TableName}` ADD COLUMN `Severity` VARCHAR(50) NOT NULL DEFAULT 'ALARM'",
                     $"ALTER TABLE `{TableName}` ADD COLUMN `restore_time` DATETIME NULL DEFAULT NULL"
                 };
@@ -374,6 +376,15 @@ namespace HinoTools.Data.Log
                         if (res == null || res == DBNull.Value)
                         {
                             dataAccess.ExecuteNonQuery(alterSqls[i]);
+                            if (checkCols[i] == "runId")
+                            {
+                                // Migrate existing realtime alarm records based on batchId
+                                string migrateLogsSql = $"UPDATE `{TableName}` t " +
+                                                        "JOIN `runs` r ON t.batchId = r.batch_id " +
+                                                        "SET t.runId = r.id " +
+                                                        "WHERE t.runId IS NULL AND t.batchId IS NOT NULL";
+                                dataAccess.ExecuteNonQuery(migrateLogsSql);
+                            }
                         }
                     }
                     catch { }
@@ -414,6 +425,7 @@ namespace HinoTools.Data.Log
                 int quyTrinh = 0;
                 string congDoan = "IDLE";
                 string batchIdValue = "NULL";
+                string runIdValue = "NULL";
 
                 if (AlarmReportLogger != null)
                 {
@@ -423,10 +435,14 @@ namespace HinoTools.Data.Log
                     {
                         batchIdValue = AlarmReportLogger.ActiveBatchId.Value.ToString();
                     }
+                    if (AlarmReportLogger.ActiveRunId.HasValue)
+                    {
+                        runIdValue = AlarmReportLogger.ActiveRunId.Value.ToString();
+                    }
                 }
 
                 var query = $"INSERT INTO `{TableName}` " +
-                    $"(`DateTime`, `DeviceName`, `TagName`, `Value`, `Threshold`, `Operator`, `Message`, `QuyTrinh`, `CongDoan`, `batchId`, `Severity`) " +
+                    $"(`DateTime`, `DeviceName`, `TagName`, `Value`, `Threshold`, `Operator`, `Message`, `QuyTrinh`, `CongDoan`, `batchId`, `runId`, `Severity`) " +
                     $"VALUES (" +
                     $"'{DateTime.Now:yyyy-MM-dd HH:mm:ss}', " +
                     $"'{deviceName}', " +
@@ -438,6 +454,7 @@ namespace HinoTools.Data.Log
                     $"{quyTrinh}, " +
                     $"'{congDoan}', " +
                     $"{batchIdValue}, " +
+                    $"{runIdValue}, " +
                     $"'{item.Severity}'); SELECT LAST_INSERT_ID();";
 
                 var result = dataAccess.ExecuteScalarQuery(query);

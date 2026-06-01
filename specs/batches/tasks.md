@@ -1,39 +1,57 @@
-# Kế hoạch triển khai (Implementation Tasks) - Module Quản lý Mẻ (Batches) và API
+# Kế hoạch triển khai (Implementation Tasks) - Module Quản lý Batch & Run Nâng cấp
 
-Dưới đây là danh sách các công việc chi tiết (Task List) để bổ sung tính năng quản lý mẻ trộn (`batches`), thiết lập Self-hosted HTTP API cho bên thứ 3 và tích hợp liên kết mẻ trộn với các báo cáo và cảnh báo.
+Dưới đây là danh sách các công việc chi tiết (Task List) để thực hiện việc nâng cấp hệ thống đáp ứng bài toán: **1 Batch (Lô) gồm nhiều Mẻ sản xuất (Run)**, mỗi mẻ luôn gồm **8 công đoạn** hoạt động liên tục.
 
 ---
 
-## Giai đoạn 1: Thiết kế Cơ sở dữ liệu và Auto-Migration [ETA: 4h]
-- [x] **Task 1.1:** Viết câu lệnh SQL khởi tạo bảng `batches` trong file migration hoặc trong hàm khởi tạo cơ sở dữ liệu.
-- [x] **Task 1.2:** Bổ sung phương thức `AddBatchIdColumnIfNeeded` trong class `DataAccess` hoặc các logger (`AlarmReportLogger`, `AlarmLogger`) để tự động kiểm tra và thêm cột `batchId` vào bảng `alarmreport` và `alarmlog` nếu cột chưa tồn tại (Auto-Migration).
+## Giai đoạn 1: Nâng cấp Cơ sở dữ liệu và Auto-Migration [ETA: 4h]
+- [x] **Task 1.1:** Thiết kế câu lệnh SQL tạo bảng mới `runs` (Mẻ sản xuất) liên kết khóa ngoại với bảng `batches`.
+- [x] **Task 1.2:** Cập nhật phương thức `EnsureBatchesTableExists()` trong `AlarmReportLogger.cs` và `BatchesHttpServer.cs` để:
+  - Tạo bảng `runs` nếu chưa tồn tại.
+  - Tự động bổ sung cột `total_runs` kiểu `INT NOT NULL DEFAULT 1` vào bảng `batches`.
+- [x] **Task 1.3:** Cập nhật phương thức `AddBatchIdColumnIfNeeded` (hoặc tạo phương thức mới `AddRunIdColumnIfNeeded`) tại `AlarmReportLogger.cs`, `AlarmLogger.cs`, và `RealtimeThresholdLogger.cs` để tự động kiểm tra và thêm cột `runId` (`INT NULL DEFAULT NULL`) vào các bảng `alarmreport`, `alarmlog`, và `realtime_alarms`.
+- [x] **Task 1.4:** Viết câu lệnh SQL di chuyển dữ liệu (Historical Migration) chạy tự động 1 lần duy nhất:
+  - Tự động sinh 1 mẻ con trong bảng `runs` cho mỗi dòng dữ liệu `batches` lịch sử.
+  - Ánh xạ lại chính xác cột `runId` dựa trên `batchId` cho các log báo cáo và nhật ký sự cố cũ.
 
-## Giai đoạn 2: Phát triển Self-hosted HTTP API Server [ETA: 6h]
-- [x] **Task 2.1:** Tạo class `BatchesHttpServer` độc lập nằm trong dự án `HinoTools.Data` (thư mục `Http`).
-- [x] **Task 2.2:** Triển khai cơ chế lắng nghe trên cổng `5500` sử dụng lớp `HttpListener` của .NET.
-- [x] **Task 2.3:** Lập trình logic sinh tên mẻ (`device_name-date-stt`) tránh trùng lặp:
-  - Truy vấn database để đếm số lượng mẻ đã có trong ngày cho thiết bị tương ứng nhằm lấy số thứ tự `stt` tiếp theo.
-- [x] **Task 2.4:** Viết logic chèn bản ghi mẻ ở trạng thái `Pending` vào bảng `batches` và trả về kết quả định dạng JSON.
+## Giai đoạn 2: Nâng cấp Self-hosted HTTP API Server [ETA: 6h]
+- [x] **Task 2.1:** Cập nhật API `POST /api/batches/create` trong `BatchesHttpServer.cs`:
+  - Cho phép nhận tham số `runs_count` từ JSON body (mặc định bằng `1`).
+  - Thêm cột `total_runs` vào câu lệnh INSERT vào bảng `batches`.
+  - Thực thi vòng lặp để chèn `runs_count` mẻ con vào bảng `runs` ở trạng thái `Pending`.
+  - Cập nhật định dạng JSON trả về chứa đầy đủ danh sách mẻ con vừa được tạo.
+- [x] **Task 2.2:** Xây dựng API mới `GET /api/batches` trong `BatchesHttpServer.cs`:
+  - Hỗ trợ tham số truy vấn lọc theo `device_name` và giới hạn kết quả trả về `limit` (mặc định 50).
+  - Trả về danh sách Lô sắp xếp theo thời gian mới nhất.
+- [x] **Task 2.3:** Xây dựng API mới `GET /api/runs` trong `BatchesHttpServer.cs`:
+  - Bắt buộc tham số `batch_id`.
+  - Trả về danh sách tất cả các Mẻ thuộc Batch đó để giao diện người dùng hiển thị dropdown mẻ.
 
-## Giai đoạn 3: Tích hợp Dynamic DeviceName & State Machine trong AlarmReportLogger [ETA: 6h]
-- [x] **Task 3.1:** Viết helper `DeviceNameHelper` để tự động phân tách Device Name động (loại bỏ tiền tố `AFChem` và lấy tên thiết bị thực tế, ví dụ `AFChemTX01` -> `TX01`).
-- [x] **Task 3.2:** Cập nhật class `AlarmReportLogger` để khi bắt đầu mẻ (`ThoiGianCapLieu > 0` và ở trạng thái Idle):
-  - Sử dụng tên thiết bị được tách động để truy vấn DB lấy mẻ `Pending` cũ nhất (FIFO).
-  - Cập nhật trạng thái mẻ thành `Active` và lưu ID mẻ vào biến bộ nhớ `activeBatchId`.
-  - Cập nhật thời điểm `start_time = DateTime.Now`.
-  - Nếu không có mẻ `Pending`, tự động sinh mẻ khẩn cấp/fallback ở trạng thái `Active`.
-- [x] **Task 3.3:** Cập nhật logic chèn dữ liệu của `AlarmReportLogger` để điền `batchId` tương ứng vào cột `batchId` của bảng `alarmreport`.
-- [x] **Task 3.4:** Cập nhật State Machine để khi mẻ trộn kết thúc (sau khi hoàn thành Công đoạn 5: `ThoiGianXaHang == 0` và `ThoiGianRungXaHang == 0`):
-  - Cập nhật mẻ đang chạy thành `status = 'Completed'` và gán `end_time = DateTime.Now` vào database.
-  - Reset `activeBatchId = null` trong bộ nhớ.
+## Giai đoạn 3: Cập nhật State Machine trong AlarmReportLogger [ETA: 6h]
+- [x] **Task 3.1:** Thêm biến thành viên `activeRunId` dạng `int?` vào `AlarmReportLogger.cs` để lưu trữ ID mẻ con hiện tại.
+- [x] **Task 3.2:** Cập nhật phương thức `LinkOrCreateActiveBatch()` trong `AlarmReportLogger.cs`:
+  - **Quét khôi phục**: Kiểm tra xem có mẻ con nào của thiết bị đang ở trạng thái `Active` trong cơ sở dữ liệu để gán lại `activeRunId` và `activeBatchId` khi khởi động ứng dụng.
+  - **Quét FIFO**: Truy vấn lấy mẻ con có trạng thái `Pending` cũ nhất thuộc các lô sản xuất `Pending` hoặc `Active`.
+  - **Kích hoạt mẻ**: Cập nhật trạng thái mẻ con thành `Active` và Batch cha thành `Active` (nếu lô cha đang là `Pending`).
+  - **Fallback**: Nếu không có mẻ `Pending` nào, tự động tạo mới Lô khẩn cấp và Mẻ khẩn cấp và thiết lập trạng thái `Active` cho cả hai.
+- [x] **Task 3.3:** Cập nhật phương thức `InsertAlarmReport()` và các câu lệnh ghi log realtime:
+  - Ghi nhận đồng thời `batchId` = `activeBatchId` và `runId` = `activeRunId` khi chèn dữ liệu vào bảng `alarmreport`.
+- [x] **Task 3.4:** Cập nhật phương thức `CompleteActiveBatch()` khi kết thúc công đoạn 8:
+  - Cập nhật trạng thái mẻ con (`runs`) hiện tại thành `Completed` kèm theo thời gian hoàn thành.
+  - Thực thi kiểm tra đếm số mẻ chưa hoàn thành trong Lô cha.
+  - Nếu tất cả đã hoàn thành, cập nhật trạng thái Lô (`batches`) thành `Completed` và gán thời gian kết thúc. Nếu còn mẻ chưa hoàn thành, giữ nguyên trạng thái Lô là `Active`.
+  - Giải phóng bộ nhớ `activeRunId` và `activeBatchId` về `null`.
 
-## Giai đoạn 4: Tích hợp liên kết cảnh báo sự cố (AlarmLogger & AlarmServer) [ETA: 4h]
-- [x] **Task 4.1:** Cập nhật logic chèn cảnh báo của `AlarmLogger` (hoặc `AlarmServer` khi insert vào bảng `alarmlog`):
-  - Tách tên thiết bị động từ `TagName` của cảnh báo.
-  - Truy vấn bảng `batches` để lấy ID mẻ đang ở trạng thái `Active` ứng với thiết bị đó.
-  - Điền ID mẻ vừa tìm được vào cột `batchId` của bản ghi cảnh báo.
+## Giai đoạn 4: Liên kết Cảnh báo sự cố (AlarmLogger & AlarmServer) [ETA: 4h]
+- [x] **Task 4.1:** Cập nhật logic `InsertAlarm()` trong `AlarmLogger.cs`:
+  - Tách tên thiết bị động từ Tag sự cố.
+  - Truy vấn database tìm Mẻ sản xuất (`runs`) đang ở trạng thái `Active` của thiết bị đó.
+  - Gán cả `batchId` và `runId` tìm được vào câu lệnh INSERT cảnh báo sự cố vào bảng `alarmlog`.
 
-## Giai đoạn 5: Tự động hóa khởi chạy HTTP Server và Kiểm thử [ETA: 6h]
-- [x] **Task 5.1:** Cập nhật `TryInitialize` của `AlarmReportLogger` để tự động khởi tạo và chạy `BatchesHttpServer` trên cổng `5500` (được cấu hình qua thuộc tính). Tự động tắt server khi giải phóng component.
-- [x] **Task 5.2:** Xây dựng tài liệu kiểm thử chi tiết và viết các kịch bản kiểm thử API (sử dụng curl hoặc PowerShell Invoke-RestMethod).
-- [x] **Task 5.3:** Tiến hành chạy giả lập và xác minh tính đúng đắn của toàn bộ luồng dữ liệu (mẻ trộn API -> chuyển động trạng thái mẻ -> ghi log alarmreport -> ghi log alarmlog -> kết thúc mẻ).
+## Giai đoạn 5: Kiểm thử và Xác nhận (Testing & Verification) [ETA: 4h]
+- [x] **Task 5.1:** Thực hiện kiểm thử tích hợp (Integration Tests) gọi các API tạo Batch nhiều mẻ.
+- [x] **Task 5.2:** Giả lập chạy SCADA qua 8 công đoạn, xác nhận:
+  - Trạng thái Lô và Mẻ con chuyển đổi chính xác theo FIFO.
+  - Khi hoàn thành mẻ 1 của lô có 2 mẻ, lô cha vẫn giữ nguyên trạng thái `Active`.
+  - Khi hoàn thành mẻ 2, lô cha chuyển sang trạng thái `Completed`.
+- [x] **Task 5.3:** Xác minh tính chính xác của dữ liệu lịch sử sau khi migrate dữ liệu.

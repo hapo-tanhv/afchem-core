@@ -1,64 +1,73 @@
-Feature: Hệ thống Quản lý Mẻ (Batches) và Tích hợp API
+# language: vi
+Tính năng: Hệ thống Quản lý Batch (Lô) - Run (Mẻ) và Tích hợp API nâng cấp
   Là một bên thứ ba (hệ thống MES/ERP) hoặc người quản lý nhà máy
-  Tôi muốn hệ thống cung cấp API tạo mẻ trộn trước khi PLC hoạt động
-  Và tự động liên kết các báo cáo ghi log, nhật ký cảnh báo với mẻ tương ứng
-  Để tôi có thể theo dõi và thống kê báo cáo chất lượng theo từng mẻ chính xác
+  Tôi muốn hệ thống quản lý Batch (Lô) gồm nhiều Run (Mẻ) sản xuất và mỗi Mẻ gồm 8 công đoạn
+  Để tôi có thể theo dõi, vận hành độc lập và hiển thị báo cáo chất lượng chính xác theo từng mẻ của lô
 
-  Background:
+  Bối cảnh:
     Given Hệ thống HinoTools.Alarm đang chạy và kết nối SCADA
     And HTTP API tự lưu trữ đang hoạt động ngầm ở cổng 5500
-    And Bảng "batches" đã được khởi tạo trong cơ sở dữ liệu MySQL
-    And Bảng "alarmreport" và "alarmlog" đã được nâng cấp thêm cột "batchId"
+    And Bảng "batches" đã được bổ sung cột "total_runs"
+    And Bảng "runs" đã được tạo mới trong cơ sở dữ liệu MySQL
+    And Bảng "alarmreport", "alarmlog" và "realtime_alarms" đã được chèn thêm cột "runId"
 
-  Scenario: Bên thứ ba tạo mẻ thành công qua API sử dụng giá trị mặc định
-    When Bên thứ ba gửi request POST đến "http://localhost:5500/api/batches/create" với JSON body rỗng
-    Then Hệ thống tự động lấy tên thiết bị mặc định là "TX01"
-    And Sinh số thứ tự (stt) mẻ tiếp theo trong ngày hiện tại cho "TX01" (ví dụ: "01")
-    And Sinh tên mẻ dạng "TX01-yyyyMMdd-stt" (ví dụ: "TX01-20260520-01")
-    And INSERT một bản ghi mới vào bảng "batches" với status là "Pending", start_time và end_time là NULL
-    And Trả về HTTP Status Code 200 kèm JSON chứa thông tin mẻ vừa tạo cho bên thứ ba
+  Kịch bản: Tạo lô sản xuất thành công qua API kèm theo nhiều mẻ con
+    When Bên thứ ba gửi request POST đến "http://localhost:5500/api/batches/create" với JSON body chứa {"device_name": "TX01", "runs_count": 2}
+    Then Hệ thống tạo mới một bản ghi trong bảng "batches" với status là "Pending", total_runs là 2
+    And Tự động tạo 2 mẻ con trong bảng "runs" liên kết tới lô này, có run_number lần lượt là 1 và 2
+    And Tên mẻ con được sinh tự động dạng "TX01-yyyyMMdd-stt-Run01" và "TX01-yyyyMMdd-stt-Run02" ở trạng thái "Pending"
+    And Trả về HTTP Status Code 200 kèm JSON chi tiết về Lô và các Mẻ con vừa tạo
 
-  Scenario: Bên thứ ba tạo mẻ thành công qua API với thiết bị tùy chỉnh
-    When Bên thứ ba gửi request POST đến "http://localhost:5500/api/batches/create" với JSON body chứa {"device_name": "TX02"}
-    Then Hệ thống lấy tên thiết bị là "TX02"
-    And Sinh số thứ tự mẻ kế tiếp và tên mẻ dạng "TX02-20260520-01"
-    And INSERT bản ghi mới với status là "Pending" vào bảng "batches"
-    And Trả về HTTP Status Code 200 kèm JSON chứa thông tin mẻ vừa tạo
-
-  Scenario: Tự động bắt đầu mẻ trộn theo cơ chế FIFO khi PLC bắt đầu chạy
-    Given Có ít nhất hai mẻ trộn ở trạng thái "Pending" của thiết bị "TX01" trong DB
+  Kịch bản: Tự động bắt đầu mẻ sản xuất đầu tiên của lô theo cơ chế FIFO
+    Given Có một Batch "Pending" gồm 2 mẻ con ở trạng thái "Pending" ứng với thiết bị "TX01" trong DB
     And Hệ thống đang ở trạng thái Idle (chờ mẻ) với "currentCongDoan" = 0
-    When Thanh ghi "ThoiGianCapLieu" của thiết bị "AFChemTX01" (sau khi tách prefix và ánh xạ thành "TX01") có giá trị > 0
-    Then Hệ thống thực hiện truy vấn DB lấy mẻ "Pending" có thời gian tạo cũ nhất (FIFO) của thiết bị "TX01"
-    And Cập nhật trạng thái mẻ đó thành "Active" và gán "start_time" là thời điểm hiện tại (bắt đầu Công đoạn 1 trên tổng số 5 công đoạn)
-    And Gán ID mẻ đó vào biến bộ nhớ "ActiveBatchId"
-    And Chuyển sang trạng thái "Đang ghi log mẻ trộn" của mẻ hiện hành
+    When Thanh ghi "ThoiGianCapLieu" của thiết bị "AFChemTX01" có giá trị > 0
+    Then Hệ thống thực hiện truy vấn DB lấy mẻ "Pending" có ID nhỏ nhất (cũ nhất) của thiết bị "TX01"
+    And Cập nhật trạng thái mẻ con đó thành "Active", gán "start_time" là thời điểm hiện tại
+    And Cập nhật trạng thái Batch cha tương ứng thành "Active", gán "start_time" là thời điểm hiện tại
+    And Lưu "activeRunId" là ID của mẻ con và "activeBatchId" là ID của Batch cha vào bộ nhớ
+    And Hệ thống chuyển sang trạng thái ghi dữ liệu mẻ sản xuất
 
-  Scenario: Tự động khởi tạo mẻ khẩn cấp khi PLC chạy nhưng không có mẻ Pending trong DB
-    Given Không có mẻ trộn nào ở trạng thái "Pending" của thiết bị "TX01" trong DB
+  Kịch bản: Tự động bắt đầu mẻ sản xuất thứ hai của lô (Lô đã hoạt động trước đó)
+    Given Có một Batch đang ở trạng thái "Active" có "total_runs" là 2, mẻ 1 đã "Completed", mẻ 2 đang "Pending"
     And Hệ thống đang ở trạng thái Idle với "currentCongDoan" = 0
     When Thanh ghi "ThoiGianCapLieu" của thiết bị "AFChemTX01" có giá trị > 0
-    Then Hệ thống tự động tạo mới một mẻ khẩn cấp trong bảng "batches" cho thiết bị "TX01"
-    And Gán trạng thái mẻ mới tạo là "Active" và "start_time" là thời điểm hiện tại (bắt đầu 5 công đoạn của mẻ)
-    And Gán ID mẻ mới tạo vào biến bộ nhớ "ActiveBatchId"
-    And Tiến hành ghi log báo cáo mẻ trộn bình thường
+    Then Hệ thống truy vấn lấy mẻ con tiếp theo đang "Pending" (Mẻ 2) thuộc Batch "Active" này
+    And Cập nhật trạng thái mẻ con 2 thành "Active" và gán "start_time"
+    And Giữ nguyên trạng thái Batch cha là "Active"
+    And Lưu "activeRunId" của mẻ 2 và "activeBatchId" của Batch vào bộ nhớ
 
-  Scenario: Ghi log alarmreport liên kết chính xác với batchId
-    Given Hệ thống đang có một mẻ hoạt động với "ActiveBatchId" = 5
-    When Timer 30 giây kích hoạt sự kiện ghi log
-    Then Hệ thống thực hiện INSERT dòng dữ liệu báo cáo vào bảng "alarmreport" với đầy đủ thông tin của 5 công đoạn tương ứng
-    And Giá trị cột "batchId" trong dòng vừa INSERT phải bằng 5
+  Kịch bản: Tự động chèn dữ liệu báo cáo và cảnh báo kèm cả batchId và runId
+    Given Hệ thống đang có mẻ con "Active" với "activeRunId" = 20 và Batch cha có "activeBatchId" = 10
+    When Phát sinh sự kiện ghi log alarmreport hoặc cảnh báo alarmlog xảy ra
+    Then Hệ thống thực hiện chèn bản ghi vào bảng tương ứng
+    And Giá trị cột "batchId" được gán là 10
+    And Giá trị cột "runId" được gán là 20
 
-  Scenario: Tự động kết thúc mẻ sau khi hoàn thành trọn vẹn cả 5 công đoạn
-    Given Hệ thống đang ghi log cho mẻ hiện tại có "ActiveBatchId" = 5 ứng với "CongDoanMay" = 5 (Công đoạn 5 - Xả hàng)
-    When Thanh ghi "ThoiGianXaHang" và "ThoiGianRungXaHang" đều trở về giá trị 0 (từ mức > 0 trước đó, đánh dấu kết thúc Công đoạn 5 và hoàn thành 1 mẻ trộn)
-    Then Hệ thống cập nhật bản ghi mẻ ID = 5 trong bảng "batches" thành "status" = "Completed" và "end_time" = thời điểm hiện tại
-    And Giải phóng biến bộ nhớ "ActiveBatchId" về NULL
-    And Quay về trạng thái Idle chờ mẻ tiếp theo (currentCongDoan = 0)
+  Kịch bản: Hoàn thành mẻ 1 nhưng Lô cha chưa hoàn thành (Còn mẻ 2 chưa chạy)
+    Given Hệ thống đang ghi log cho mẻ 1 có "activeRunId" = 20 thuộc Batch có "activeBatchId" = 10 (lô có 2 mẻ)
+    And "currentCongDoan" = 5
+    When Cả hai thanh ghi "ThoiGianXaHang" và "ThoiGianRungXaHang" đều trở về 0 (kết thúc 8 công đoạn)
+    Then Hệ thống cập nhật mẻ 1 trong bảng "runs" thành "status" = "Completed" và "end_time" = thời điểm hiện tại
+    And Kiểm tra thấy vẫn còn mẻ 2 chưa "Completed" trong Lô này
+    And Hệ thống giữ nguyên trạng thái Lô 10 là "Active" và end_time là NULL
+    And Giải phóng "activeRunId" và "activeBatchId" về NULL trong bộ nhớ
+    And Quay về trạng thái Idle chờ mẻ 2 (currentCongDoan = 0)
 
-  Scenario: Tự động liên kết cảnh báo sự cố alarmlog với batchId hoạt động
-    Given Thiết bị "TX01" đang chạy mẻ trộn có "ActiveBatchId" = 5 trong database (status = "Active")
-    When Một cảnh báo sự cố xảy ra cho tag "AFChemTX01.ApSuat"
-    Then Hệ thống tự động xác định thiết bị tương ứng là "TX01"
-    And Thực hiện truy vấn DB tìm mẻ đang "Active" của thiết bị "TX01" (kết quả là ID = 5)
-    And Thực hiện INSERT dòng cảnh báo vào bảng "alarmlog" với cột "batchId" được gán giá trị 5
+  Kịch bản: Hoàn thành mẻ cuối cùng và hoàn thành toàn bộ Lô sản xuất
+    Given Hệ thống đang ghi log cho mẻ 2 có "activeRunId" = 21 thuộc Batch có "activeBatchId" = 10
+    And Mẻ 1 của Batch này đã hoàn thành trước đó
+    And "currentCongDoan" = 5
+    When Cả hai thanh ghi "ThoiGianXaHang" và "ThoiGianRungXaHang" đều trở về 0
+    Then Hệ thống cập nhật mẻ 2 trong bảng "runs" thành "Completed" và ghi nhận "end_time"
+    And Kiểm tra thấy tất cả các mẻ con (Mẻ 1 & Mẻ 2) của Lô 10 đã ở trạng thái "Completed"
+    And Cập nhật trạng thái Batch 10 thành "Completed" và gán "end_time" của Batch
+    And Giải phóng bộ nhớ "activeRunId" và "activeBatchId" về NULL
+    And Quay về trạng thái Idle chờ Lô mới tiếp theo
+
+  Kịch bản: Giao diện lọc tự động chọn mẻ mới nhất khi người dùng chọn Batch
+    Given Người dùng mở giao diện giám sát chất lượng sản xuất
+    When Người dùng chọn một Batch có ID = 10 từ danh sách
+    Then Hệ thống tải danh sách các mẻ con của Batch 10 (ví dụ: Mẻ 1 và Mẻ 2)
+    And Dropdown chọn Mẻ tự động thiết lập lựa chọn là Mẻ 2 (Mẻ mới nhất dựa trên run_number)
+    And Hiển thị đồ thị và dữ liệu báo cáo chất lượng tương ứng với Mẻ 2

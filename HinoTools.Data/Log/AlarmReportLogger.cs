@@ -45,6 +45,7 @@ namespace HinoTools.Data.Log
         private HinoTools.Data.Http.BatchesHttpServer httpServer;
         private HinoTools.Data.Http.WebhookHttpServer webhookServer;
         private int? activeBatchId = null;
+        private int? activeRunId = null;
 
         private DateTime lastAlarmReportTime = DateTime.MinValue;
 
@@ -55,6 +56,7 @@ namespace HinoTools.Data.Log
         public int CurrentCongDoan => currentCongDoan;
         public int CurrentQuyTrinh => currentQuyTrinh;
         public int? ActiveBatchId => activeBatchId;
+        public int? ActiveRunId => activeRunId;
 
         public string CurrentCongDoanName
         {
@@ -218,6 +220,7 @@ namespace HinoTools.Data.Log
             EnsureBatchesTableExists();
             CreateTableIfNotExists();
             AddBatchIdColumnIfNeeded(TableName);
+            AddRunIdColumnIfNeeded(TableName);
 
             // Start HTTP API Server
             try
@@ -526,6 +529,33 @@ namespace HinoTools.Data.Log
             }
         }
 
+        private void AddRunIdColumnIfNeeded(string tableName)
+        {
+            try
+            {
+                dataAccess.ConnectionString = GetConnectionStringWithDb();
+                string checkQuery = $"SHOW COLUMNS FROM `{tableName}` LIKE 'runId'";
+                var result = dataAccess.ExecuteScalarQuery(checkQuery);
+                if (result == null || result == DBNull.Value)
+                {
+                    string alterQuery = $"ALTER TABLE `{tableName}` ADD COLUMN `runId` INT NULL DEFAULT NULL AFTER `batchId`";
+                    dataAccess.ExecuteNonQuery(alterQuery);
+                    System.Diagnostics.Debug.WriteLine($"[Migration] Added runId column to {tableName} successfully.");
+
+                    // Migrate existing historical log records to map runId = run.id based on batchId
+                    string migrateLogsSql = $"UPDATE `{tableName}` t " +
+                                            "JOIN `runs` r ON t.batchId = r.batch_id " +
+                                            "SET t.runId = r.id " +
+                                            "WHERE t.runId IS NULL AND t.batchId IS NOT NULL";
+                    dataAccess.ExecuteNonQuery(migrateLogsSql);
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[Migration] ERROR adding runId column to {tableName}: {ex.Message}");
+            }
+        }
+
         private void EnsureBatchesTableExists()
         {
             try
@@ -541,6 +571,43 @@ namespace HinoTools.Data.Log
                                         "  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP" +
                                         ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;";
                 dataAccess.ExecuteNonQuery(createTableSql);
+
+                // Task 1.2: Check and add total_runs column to batches table
+                string checkColQuery = "SHOW COLUMNS FROM `batches` LIKE 'total_runs'";
+                var result = dataAccess.ExecuteScalarQuery(checkColQuery);
+                if (result == null || result == DBNull.Value)
+                {
+                    string alterQuery = "ALTER TABLE `batches` ADD COLUMN `total_runs` INT NOT NULL DEFAULT 1 AFTER `status`";
+                    dataAccess.ExecuteNonQuery(alterQuery);
+                    System.Diagnostics.Debug.WriteLine("[Migration] Added total_runs column to batches table successfully.");
+                }
+
+                // Task 1.1 & 1.2: Create runs table
+                string createRunsTableSql = "CREATE TABLE IF NOT EXISTS `runs` (" +
+                                            "  `id` INT AUTO_INCREMENT PRIMARY KEY," +
+                                            "  `batch_id` INT NOT NULL," +
+                                            "  `run_number` INT NOT NULL," +
+                                            "  `name` VARCHAR(150) NOT NULL UNIQUE," +
+                                            "  `status` VARCHAR(50) NOT NULL DEFAULT 'Pending'," +
+                                            "  `start_time` DATETIME NULL," +
+                                            "  `end_time` DATETIME NULL," +
+                                            "  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP," +
+                                            "  FOREIGN KEY (`batch_id`) REFERENCES `batches`(`id`) ON DELETE CASCADE," +
+                                            "  INDEX `idx_runs_batch` (`batch_id`)," +
+                                            "  INDEX `idx_runs_status` (`status`)" +
+                                            ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;";
+                dataAccess.ExecuteNonQuery(createRunsTableSql);
+
+                // Task 1.4: Historical data migration (One-time check and execution)
+                string migrateRunsSql = "INSERT INTO `runs` (`batch_id`, `run_number`, `name`, `status`, `start_time`, `end_time`, `created_at`) " +
+                                        "SELECT b.id, 1, CONCAT(b.name, '-Run01'), b.status, b.start_time, b.end_time, b.created_at " +
+                                        "FROM `batches` b " +
+                                        "WHERE NOT EXISTS (SELECT 1 FROM `runs` r WHERE r.batch_id = b.id)";
+                int rows = dataAccess.ExecuteNonQuery(migrateRunsSql);
+                if (rows > 0)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[Migration] Migrated {rows} historical batches to the new runs structure.");
+                }
             }
             catch (Exception ex)
             {
@@ -554,41 +621,57 @@ namespace HinoTools.Data.Log
             {
                 dataAccess.ConnectionString = GetConnectionStringWithDb();
 
-                // 0. Check if there is already an Active batch for this device (prevents race condition with AlarmLogger)
-                string activeQuery = $"SELECT `id` FROM `batches` " +
-                                     $"WHERE `device_name` = '{deviceName}' AND `status` = 'Active' " +
-                                     $"ORDER BY `id` DESC LIMIT 1";
-                var activeResult = dataAccess.ExecuteScalarQuery(activeQuery);
-                if (activeResult != null && activeResult != DBNull.Value)
+                // 0. Check if there is already an Active run for this device (prevents race condition and handles application restart)
+                string activeQuery = "SELECT r.id, r.batch_id FROM `runs` r " +
+                                     "JOIN `batches` b ON r.batch_id = b.id " +
+                                     $"WHERE b.device_name = '{deviceName}' AND r.status = 'Active' " +
+                                     "ORDER BY r.id DESC LIMIT 1";
+                var activeDt = dataAccess.ExecuteQuery(activeQuery);
+                if (activeDt != null && activeDt.Rows.Count > 0)
                 {
-                    activeBatchId = Convert.ToInt32(activeResult);
-                    System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] Already found an Active batch (ID: {activeBatchId.Value}). Linking to it.");
+                    activeRunId = Convert.ToInt32(activeDt.Rows[0]["id"]);
+                    activeBatchId = Convert.ToInt32(activeDt.Rows[0]["batch_id"]);
+                    System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] Re-linked to already Active Run ID: {activeRunId.Value}, Batch ID: {activeBatchId.Value}");
                     return;
                 }
                 
-                // 1. Find the oldest 'Pending' batch for this device (FIFO)
-                string findQuery = $"SELECT `id`, `name` FROM `batches` " +
-                                   $"WHERE `device_name` = '{deviceName}' AND `status` = 'Pending' " +
-                                   $"ORDER BY `id` ASC LIMIT 1";
+                // 1. Find the oldest 'Pending' run for this device (FIFO)
+                string findQuery = "SELECT r.id, r.batch_id, b.name as batch_name, b.status as batch_status FROM `runs` r " +
+                                   "JOIN `batches` b ON r.batch_id = b.id " +
+                                   $"WHERE b.device_name = '{deviceName}' AND r.status = 'Pending' " +
+                                   "ORDER BY b.id ASC, r.run_number ASC LIMIT 1";
                 
                 var dt = dataAccess.ExecuteQuery(findQuery);
                 if (dt != null && dt.Rows.Count > 0)
                 {
-                    int batchId = Convert.ToInt32(dt.Rows[0]["id"]);
-                    string batchName = dt.Rows[0]["name"].ToString();
+                    int runId = Convert.ToInt32(dt.Rows[0]["id"]);
+                    int batchId = Convert.ToInt32(dt.Rows[0]["batch_id"]);
+                    string batchName = dt.Rows[0]["batch_name"].ToString();
+                    string batchStatus = dt.Rows[0]["batch_status"].ToString();
                     
-                    // Update this batch to Active and set start_time
-                    string updateQuery = $"UPDATE `batches` " +
-                                         $"SET `status` = 'Active', `start_time` = '{DateTime.Now:yyyy-MM-dd HH:mm:ss}' " +
-                                         $"WHERE `id` = {batchId}";
-                    dataAccess.ExecuteNonQuery(updateQuery);
+                    // Update this run to Active and set start_time
+                    string updateRunQuery = $"UPDATE `runs` " +
+                                            $"SET `status` = 'Active', `start_time` = '{DateTime.Now:yyyy-MM-dd HH:mm:ss}' " +
+                                            $"WHERE `id` = {runId}";
+                    dataAccess.ExecuteNonQuery(updateRunQuery);
+
+                    // Update parent batch to Active if it is still Pending
+                    if (batchStatus == "Pending")
+                    {
+                        string updateBatchQuery = $"UPDATE `batches` " +
+                                                  $"SET `status` = 'Active', `start_time` = '{DateTime.Now:yyyy-MM-dd HH:mm:ss}' " +
+                                                  $"WHERE `id` = {batchId}";
+                        dataAccess.ExecuteNonQuery(updateBatchQuery);
+                        System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] Activated Batch '{batchName}' (ID: {batchId}) due to first Run starting.");
+                    }
                     
+                    activeRunId = runId;
                     activeBatchId = batchId;
-                    System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] FIFO linked batch '{batchName}' (ID: {batchId}) as Active.");
+                    System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] FIFO linked Run ID: {runId} in Batch ID: {batchId} as Active.");
                 }
                 else
                 {
-                    // 2. If no Pending batch exists, auto-generate a fallback/emergency batch
+                    // 2. If no Pending run exists, auto-generate a fallback/emergency batch & run (Self-healing)
                     string todayStr = DateTime.Now.ToString("yyyyMMdd");
                     int nextStt = 1;
                     
@@ -608,48 +691,86 @@ namespace HinoTools.Data.Log
                     
                     string fallbackBatchName = $"{deviceName}-{todayStr}-{nextStt:D2}";
                     
-                    // Insert and mark as Active immediately
-                    string insertQuery = $"INSERT INTO `batches` (`name`, `device_name`, `status`, `start_time`, `created_at`) " +
-                                         $"VALUES ('{fallbackBatchName}', '{deviceName}', 'Active', '{DateTime.Now:yyyy-MM-dd HH:mm:ss}', NOW())";
-                    dataAccess.ExecuteNonQuery(insertQuery);
+                    // Insert Batch and mark as Active immediately
+                    string insertBatchQuery = $"INSERT INTO `batches` (`name`, `device_name`, `status`, `total_runs`, `start_time`, `created_at`) " +
+                                              $"VALUES ('{fallbackBatchName}', '{deviceName}', 'Active', 1, '{DateTime.Now:yyyy-MM-dd HH:mm:ss}', NOW())";
+                    dataAccess.ExecuteNonQuery(insertBatchQuery);
                     
-                    // Get the last inserted ID
-                    string getLastIdQuery = "SELECT LAST_INSERT_ID()";
-                    var lastIdObj = dataAccess.ExecuteScalarQuery(getLastIdQuery);
-                    if (lastIdObj != null && lastIdObj != DBNull.Value)
+                    // Get the last inserted Batch ID
+                    string getLastBatchIdQuery = "SELECT LAST_INSERT_ID()";
+                    var lastBatchIdObj = dataAccess.ExecuteScalarQuery(getLastBatchIdQuery);
+                    if (lastBatchIdObj != null && lastBatchIdObj != DBNull.Value)
                     {
-                        activeBatchId = Convert.ToInt32(lastIdObj);
+                        activeBatchId = Convert.ToInt32(lastBatchIdObj);
+                    }
+
+                    // Insert corresponding Run and mark as Active immediately
+                    string fallbackRunName = $"{fallbackBatchName}-Run01";
+                    string insertRunQuery = $"INSERT INTO `runs` (`batch_id`, `run_number`, `name`, `status`, `start_time`, `created_at`) " +
+                                            $"VALUES ({activeBatchId.Value}, 1, '{fallbackRunName}', 'Active', '{DateTime.Now:yyyy-MM-dd HH:mm:ss}', NOW())";
+                    dataAccess.ExecuteNonQuery(insertRunQuery);
+
+                    // Get the last inserted Run ID
+                    string getLastRunIdQuery = "SELECT LAST_INSERT_ID()";
+                    var lastRunIdObj = dataAccess.ExecuteScalarQuery(getLastRunIdQuery);
+                    if (lastRunIdObj != null && lastRunIdObj != DBNull.Value)
+                    {
+                        activeRunId = Convert.ToInt32(lastRunIdObj);
                     }
                     
-                    System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] No Pending batch found. Created fallback Active batch '{fallbackBatchName}' (ID: {activeBatchId}).");
+                    System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] No Pending run found. Created fallback Active Batch '{fallbackBatchName}' (ID: {activeBatchId}) and Run (ID: {activeRunId}).");
                 }
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] ERROR linking/creating batch: {ex.Message}");
                 activeBatchId = null;
+                activeRunId = null;
             }
         }
 
         private void CompleteActiveBatch()
         {
-            if (activeBatchId == null) return;
+            if (activeRunId == null) return;
             
             try
             {
                 dataAccess.ConnectionString = GetConnectionStringWithDb();
-                string updateQuery = $"UPDATE `batches` " +
-                                     $"SET `status` = 'Completed', `end_time` = '{DateTime.Now:yyyy-MM-dd HH:mm:ss}' " +
-                                     $"WHERE `id` = {activeBatchId.Value}";
-                dataAccess.ExecuteNonQuery(updateQuery);
-                System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] Completed batch ID {activeBatchId.Value} successfully.");
+                string nowStr = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+
+                // 1. Complete the active Run
+                string completeRunQuery = $"UPDATE `runs` " +
+                                           $"SET `status` = 'Completed', `end_time` = '{nowStr}' " +
+                                           $"WHERE `id` = {activeRunId.Value}";
+                dataAccess.ExecuteNonQuery(completeRunQuery);
+                System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] Completed Run ID {activeRunId.Value} successfully.");
+
+                // 2. Check if all runs in the parent Batch are completed
+                string checkRemainingQuery = $"SELECT COUNT(*) FROM `runs` WHERE `batch_id` = {activeBatchId.Value} AND `status` != 'Completed'";
+                var remainingObj = dataAccess.ExecuteScalarQuery(checkRemainingQuery);
+                int remainingCount = remainingObj != null ? Convert.ToInt32(remainingObj) : 0;
+
+                if (remainingCount == 0)
+                {
+                    // If no remaining runs, complete the parent Batch
+                    string completeBatchQuery = $"UPDATE `batches` " +
+                                                 $"SET `status` = 'Completed', `end_time` = '{nowStr}' " +
+                                                 $"WHERE `id` = {activeBatchId.Value}";
+                    dataAccess.ExecuteNonQuery(completeBatchQuery);
+                    System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] Completed Batch ID {activeBatchId.Value} since all its runs are completed.");
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] Batch ID {activeBatchId.Value} remains Active since {remainingCount} run(s) are still pending.");
+                }
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] ERROR completing batch: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] ERROR completing batch/run: {ex.Message}");
             }
             finally
             {
+                activeRunId = null;
                 activeBatchId = null;
             }
         }
@@ -672,7 +793,8 @@ namespace HinoTools.Data.Log
                 sb.Append("`DeviceName` VARCHAR(100) NOT NULL, ");
                 sb.Append("`QuyTrinh` INT NOT NULL DEFAULT 0, ");
                 sb.Append("`CongDoanMay` INT NOT NULL DEFAULT 0, ");
-                sb.Append("`batchId` INT NULL DEFAULT NULL");
+                sb.Append("`batchId` INT NULL DEFAULT NULL, ");
+                sb.Append("`runId` INT NULL DEFAULT NULL");
 
                 // Add columns for each configured register
                 foreach (var item in logItems)
@@ -724,10 +846,11 @@ namespace HinoTools.Data.Log
                 }
 
                 string batchIdValue = activeBatchId.HasValue ? activeBatchId.Value.ToString() : "NULL";
+                string runIdValue = activeRunId.HasValue ? activeRunId.Value.ToString() : "NULL";
 
                 var query = $"INSERT INTO `{TableName}` " +
-                    $"(`DateTime`, `DeviceName`, `QuyTrinh`, `CongDoanMay`, `batchId`{fieldBuilder}) " +
-                    $"VALUES ('{DateTime.Now:yyyy-MM-dd HH:mm:ss}', '{deviceName}', {currentQuyTrinh}, {currentCongDoan}, {batchIdValue}{valueBuilder})";
+                    $"(`DateTime`, `DeviceName`, `QuyTrinh`, `CongDoanMay`, `batchId`, `runId`{fieldBuilder}) " +
+                    $"VALUES ('{DateTime.Now:yyyy-MM-dd HH:mm:ss}', '{deviceName}', {currentQuyTrinh}, {currentCongDoan}, {batchIdValue}, {runIdValue}{valueBuilder})";
 
                 return dataAccess.ExecuteNonQuery(query) >= 0;
             }
@@ -792,17 +915,19 @@ namespace HinoTools.Data.Log
                     "`QuyTrinh` INT NOT NULL DEFAULT 0, " +
                     "`CongDoan` VARCHAR(100) NOT NULL DEFAULT '', " +
                     "`batchId` INT NULL DEFAULT NULL, " +
+                    "`runId` INT NULL DEFAULT NULL, " +
                     "`Severity` VARCHAR(50) NOT NULL DEFAULT 'ALARM', " +
                     "`restore_time` DATETIME NULL DEFAULT NULL" +
                     ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;";
                 dataAccess.ExecuteNonQuery(createTableSql);
 
                 // Add columns just in case the table existed without them
-                string[] checkCols = { "QuyTrinh", "CongDoan", "batchId", "Severity", "restore_time" };
+                string[] checkCols = { "QuyTrinh", "CongDoan", "batchId", "runId", "Severity", "restore_time" };
                 string[] alterSqls = {
                     $"ALTER TABLE `{tblName}` ADD COLUMN `QuyTrinh` INT NOT NULL DEFAULT 0",
                     $"ALTER TABLE `{tblName}` ADD COLUMN `CongDoan` VARCHAR(100) NOT NULL DEFAULT ''",
                     $"ALTER TABLE `{tblName}` ADD COLUMN `batchId` INT NULL DEFAULT NULL",
+                    $"ALTER TABLE `{tblName}` ADD COLUMN `runId` INT NULL DEFAULT NULL AFTER `batchId`",
                     $"ALTER TABLE `{tblName}` ADD COLUMN `Severity` VARCHAR(50) NOT NULL DEFAULT 'ALARM'",
                     $"ALTER TABLE `{tblName}` ADD COLUMN `restore_time` DATETIME NULL DEFAULT NULL"
                 };
@@ -816,6 +941,15 @@ namespace HinoTools.Data.Log
                         if (res == null || res == DBNull.Value)
                         {
                             dataAccess.ExecuteNonQuery(alterSqls[i]);
+                            if (checkCols[i] == "runId")
+                            {
+                                // Migrate existing realtime alarm records based on batchId
+                                string migrateLogsSql = $"UPDATE `{tblName}` t " +
+                                                        "JOIN `runs` r ON t.batchId = r.batch_id " +
+                                                        "SET t.runId = r.id " +
+                                                        "WHERE t.runId IS NULL AND t.batchId IS NOT NULL";
+                                dataAccess.ExecuteNonQuery(migrateLogsSql);
+                            }
                         }
                     }
                     catch { }
@@ -823,10 +957,10 @@ namespace HinoTools.Data.Log
 
                 // Check for duplicate INFO log within the same stage (CongDoan) of the same batch/process
                 string checkDuplicateQuery;
-                if (activeBatchId.HasValue)
+                if (activeRunId.HasValue)
                 {
                     checkDuplicateQuery = $"SELECT COUNT(*) FROM `{tblName}` " +
-                                          $"WHERE `batchId` = {activeBatchId.Value} AND `CongDoan` = '{stageName}' AND `Severity` = 'INFO'";
+                                          $"WHERE `runId` = {activeRunId.Value} AND `CongDoan` = '{stageName}' AND `Severity` = 'INFO'";
                 }
                 else
                 {
@@ -840,15 +974,16 @@ namespace HinoTools.Data.Log
                     int count = Convert.ToInt32(countObj);
                     if (count > 0)
                     {
-                        System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] INFO event for stage '{stageName}' already logged in this batch. Skipping duplicate.");
+                        System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] INFO event for stage '{stageName}' already logged in this batch/run. Skipping duplicate.");
                         return true;
                     }
                 }
 
                 string batchIdValue = activeBatchId.HasValue ? activeBatchId.Value.ToString() : "NULL";
+                string runIdValue = activeRunId.HasValue ? activeRunId.Value.ToString() : "NULL";
 
                 var query = $"INSERT INTO `{tblName}` " +
-                    $"(`DateTime`, `DeviceName`, `TagName`, `Value`, `Threshold`, `Operator`, `Message`, `QuyTrinh`, `CongDoan`, `batchId`, `Severity`) " +
+                    $"(`DateTime`, `DeviceName`, `TagName`, `Value`, `Threshold`, `Operator`, `Message`, `QuyTrinh`, `CongDoan`, `batchId`, `runId`, `Severity`) " +
                     $"VALUES (" +
                     $"'{DateTime.Now:yyyy-MM-dd HH:mm:ss}', " +
                     $"'{deviceName}', " +
@@ -860,6 +995,7 @@ namespace HinoTools.Data.Log
                     $"{currentQuyTrinh}, " +
                     $"'{stageName}', " +
                     $"{batchIdValue}, " +
+                    $"{runIdValue}, " +
                     $"'INFO')";
 
                 return dataAccess.ExecuteNonQuery(query) >= 0;
