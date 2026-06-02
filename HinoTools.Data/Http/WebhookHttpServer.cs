@@ -148,14 +148,6 @@ namespace HinoTools.Data.Http
                         return;
                     }
 
-                    // Kiểm tra Content-Type (nếu có truyền phải chứa application/json)
-                    string contentType = request.ContentType;
-                    if (!string.IsNullOrEmpty(contentType) && !contentType.ToLower().Contains("application/json"))
-                    {
-                        string errorJson = "{\n  \"success\": false,\n  \"message\": \"Content-Type must be application/json\"\n}";
-                        SendJsonResponse(response, HttpStatusCode.UnsupportedMediaType, errorJson);
-                        return;
-                    }
 
                     // Xác thực Token bảo mật qua Header X-Webhook-Token hoặc Query Parameter (?token=...)
                     string requestToken = request.Headers["X-Webhook-Token"];

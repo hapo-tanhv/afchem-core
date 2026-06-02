@@ -297,6 +297,38 @@ namespace HinoTools.Data.Log
             {
                 tmrLog.Stop();
 
+                // Sync active run and batch from the database dynamically to prevent out-of-sync state
+                try
+                {
+                    dataAccess.ConnectionString = GetConnectionStringWithDb();
+                    string activeQuery = "SELECT r.id, r.batch_id FROM `runs` r " +
+                                         "JOIN `batches` b ON r.batch_id = b.id " +
+                                         $"WHERE b.device_name = '{deviceName}' AND r.status = 'Active' " +
+                                         "ORDER BY r.id DESC LIMIT 1";
+                    var activeDt = dataAccess.ExecuteQuery(activeQuery);
+                    if (activeDt != null && activeDt.Rows.Count > 0)
+                    {
+                        int dbRunId = Convert.ToInt32(activeDt.Rows[0]["id"]);
+                        int dbBatchId = Convert.ToInt32(activeDt.Rows[0]["batch_id"]);
+
+                        // If the database active run ID has changed, reset the in-memory state machine
+                        if (activeRunId != dbRunId)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] New active run detected in DB: {dbRunId} (old in-memory: {activeRunId}). Resetting state machine to align.");
+                            activeRunId = dbRunId;
+                            activeBatchId = dbBatchId;
+                            currentCongDoan = 1;
+                            ResetFlags();
+                            hasThoiGianCapLieuStarted = true;
+                            lastAlarmReportTime = DateTime.MinValue; // Trigger instant logging for the new run
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] Sync active run ERROR: {ex.Message}");
+                }
+
                 double thoiGianCapLieu = GetTagValueByAlias("ThoiGianCapLieu");
                 double thoiGianTron1 = GetTagValueByAlias("ThoiGianTron1");
                 double thoiGianHutXa = GetTagValueByAlias("ThoiGianHutXaDay");
@@ -304,7 +336,7 @@ namespace HinoTools.Data.Log
                 double thoiGianRungXaHang = GetTagValueByAlias("ThoiGianRungXaHang");
                 double thoiGianXaHang = GetTagValueByAlias("ThoiGianXaHang");
 
-                System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] Poll: CongDoan={currentCongDoan}, QuyTrinh={currentQuyTrinh}");
+                System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] Poll: CongDoan={currentCongDoan}, QuyTrinh={currentQuyTrinh}, ActiveRun={activeRunId}, ActiveBatch={activeBatchId}");
 
                 int previousCongDoan = currentCongDoan;
 
