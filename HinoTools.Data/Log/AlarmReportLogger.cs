@@ -38,6 +38,9 @@ namespace HinoTools.Data.Log
         private bool isThoiGianRungXaHangFinished = false;
         private bool isThoiGianXaHangFinished = false;
 
+        // Tracking for stop/pause
+        private DateTime? stopStartTime = null;
+
         // Tag references (resolved once at startup)
         private List<LogItem> logItems;
 
@@ -158,6 +161,10 @@ namespace HinoTools.Data.Log
         [Category("Hino Settings")]
         [Description("Webhook Secret Security Token.")]
         public string WebhookToken { get; set; } = "wh_tok_2f8d9b1e4c7a6e5b3d2c1f0a9e8d7c6b";
+
+        [Category("Hino Settings")]
+        [Description("Timeout in seconds before a stopped/paused batch in stage 1-4 is marked as Error (default: 7200s = 2h).")]
+        public int StopTimeout { get; set; } = 7200;
 
         private string[] _collection;
 
@@ -336,84 +343,185 @@ namespace HinoTools.Data.Log
                 double thoiGianRungXaHang = GetTagValueByAlias("ThoiGianRungXaHang");
                 double thoiGianXaHang = GetTagValueByAlias("ThoiGianXaHang");
 
-                System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] Poll: CongDoan={currentCongDoan}, QuyTrinh={currentQuyTrinh}, ActiveRun={activeRunId}, ActiveBatch={activeBatchId}");
+                double stopValue = GetSystemTagValue("Stop");
+                double runValue = GetSystemTagValue("Run");
+                bool isStopped = (stopValue == 1);
+
+                System.Diagnostics.Debug.WriteLine(string.Format("[AlarmReportLogger] Poll: CongDoan={0}, QuyTrinh={1}, ActiveRun={2}, ActiveBatch={3}, Stop={4}, Run={5}", 
+                    currentCongDoan, currentQuyTrinh, activeRunId, activeBatchId, stopValue, runValue));
 
                 int previousCongDoan = currentCongDoan;
 
-                if (currentCongDoan == 1)
+                double thoiGianXaDay = GetTagValueByAlias("ThoiGianXaDay");
+                double thoiGianRungXaDay = GetTagValueByAlias("ThoiGianRungXaDay");
+
+                // 1. Check for Reset event (Stop = 1 and active stage timer is reset to 0)
+                bool isReset = false;
+                if (currentCongDoan > 0 && currentCongDoan < 5 && isStopped)
                 {
-                    if (thoiGianCapLieu > 0) hasThoiGianCapLieuStarted = true;
-                    if (hasThoiGianCapLieuStarted && thoiGianCapLieu == 0)
-                    {
-                        currentCongDoan = 2;
-                        InsertRealtimeInfoEvent("T002", "Bắt đầu trộn lần 1");
-                    }
-                }
-                
-                if (currentCongDoan == 2)
-                {
-                    if (thoiGianTron1 > 0) hasThoiGianTron1Started = true;
-                    if (hasThoiGianTron1Started && thoiGianTron1 == 0)
-                    {
-                        currentCongDoan = 3;
-                        InsertRealtimeInfoEvent("T003", "Bắt đầu xả đáy");
-                    }
+                    if (currentCongDoan == 1 && hasThoiGianCapLieuStarted && thoiGianCapLieu == 0)
+                        isReset = true;
+                    else if (currentCongDoan == 2 && hasThoiGianTron1Started && thoiGianTron1 == 0)
+                        isReset = true;
+                    else if (currentCongDoan == 3 && thoiGianXaDay == 0 && thoiGianRungXaDay == 0 && thoiGianHutXa == 0)
+                        isReset = true;
+                    else if (currentCongDoan == 4 && hasThoiGianTron2Started && thoiGianTron2 == 0)
+                        isReset = true;
                 }
 
-                if (currentCongDoan == 3)
+                // 2. State Machine logic
+                if (currentCongDoan > 0)
                 {
-                    double thoiGianRungXaDay = GetTagValueByAlias("ThoiGianRungXaDay");
-                    if (thoiGianRungXaDay > 0)
+                    if (isReset)
                     {
-                        InsertRealtimeInfoEvent("T004", "Bắt đầu rung xả đáy");
-                    }
-                    if (thoiGianHutXa > 0)
-                    {
-                        InsertRealtimeInfoEvent("T005", "Bắt đầu hút xả đáy");
-                    }
-
-                    if (thoiGianHutXa > 0) hasThoiGianHutXaStarted = true;
-                    if (hasThoiGianHutXaStarted && thoiGianHutXa == 0)
-                    {
-                        currentCongDoan = 4;
-                        InsertRealtimeInfoEvent("T006", "Bắt đầu trộn lần 2");
-                    }
-                }
-
-                if (currentCongDoan == 4)
-                {
-                    if (thoiGianTron2 > 0) hasThoiGianTron2Started = true;
-                    if (hasThoiGianTron2Started && thoiGianTron2 == 0)
-                    {
-                        currentCongDoan = 5;
-                        InsertRealtimeInfoEvent("T007", "Bắt đầu xả hàng");
-                    }
-                }
-
-                if (currentCongDoan == 5)
-                {
-                    if (thoiGianRungXaHang > 0)
-                    {
-                        InsertRealtimeInfoEvent("T008", "Bắt đầu rung xả hàng");
-                    }
-
-                    if (thoiGianRungXaHang > 0) hasThoiGianRungXaHangStarted = true;
-                    if (thoiGianXaHang > 0) hasThoiGianXaHangStarted = true;
-
-                    if (hasThoiGianRungXaHangStarted && thoiGianRungXaHang == 0) isThoiGianRungXaHangFinished = true;
-                    if (hasThoiGianXaHangStarted && thoiGianXaHang == 0) isThoiGianXaHangFinished = true;
-
-                    if (isThoiGianRungXaHangFinished && isThoiGianXaHangFinished)
-                    {
+                        System.Diagnostics.Debug.WriteLine(string.Format("[AlarmReportLogger] Reset detected in stage {0}. Aborting run.", currentCongDoan));
+                        
+                        // Capture final state in alarmreport log
+                        InsertAlarmReport();
+                        
+                        // Fail the run
+                        FailActiveBatch();
+                        
                         currentCongDoan = 0; // Return to Idle
-                        InsertRealtimeInfoEvent("IDLE", "Xả liệu hoàn tất");
-                        CompleteActiveBatch();
+                        stopStartTime = null;
+                    }
+                    else if (isStopped)
+                    {
+                        if (currentCongDoan == 5)
+                        {
+                            // In stage 5, Stop = 1 means complete run normally immediately
+                            currentCongDoan = 0; // Return to Idle
+                            InsertRealtimeInfoEvent("IDLE", "Xả liệu hoàn tất (Dừng máy)");
+                            CompleteActiveBatch();
+                            stopStartTime = null;
+                        }
+                        else
+                        {
+                            // Reset started flags when stopped/paused to avoid false transitions on resume
+                            ResetFlags();
+
+                            // Track timeout for long stopped state (e.g. 2 hours)
+                            if (stopStartTime == null)
+                            {
+                                stopStartTime = DateTime.Now;
+                            }
+                            else
+                            {
+                                double elapsed = (DateTime.Now - stopStartTime.Value).TotalSeconds;
+                                if (elapsed >= StopTimeout)
+                                {
+                                    System.Diagnostics.Debug.WriteLine(string.Format("[AlarmReportLogger] Run stopped for {0}s. Auto-cleaning and marking as Error.", elapsed));
+                                    InsertAlarmReport();
+                                    FailActiveBatch();
+                                    currentCongDoan = 0; // Return to Idle
+                                    stopStartTime = null;
+                                }
+                            }
+                        }
+                    }
+                    else
+                    {
+                        // Resumed / Running normally
+                        if (stopStartTime != null)
+                        {
+                            System.Diagnostics.Debug.WriteLine("[AlarmReportLogger] Machine resumed. Resetting timeout tracker.");
+                            stopStartTime = null;
+                        }
+
+                        // Check if a new run has started mid-way (Self-healing for un-notified resets)
+                        if (currentCongDoan > 1 && thoiGianCapLieu > 0)
+                        {
+                            System.Diagnostics.Debug.WriteLine(string.Format("[AlarmReportLogger] New run start detected while in stage {0}. Marking previous run as Error.", currentCongDoan));
+                            FailActiveBatch();
+                            
+                            // Initialize new run
+                            currentQuyTrinh = GetMaxQuyTrinhFromDb() + 1;
+                            currentCongDoan = 1;
+                            ResetFlags();
+                            hasThoiGianCapLieuStarted = true;
+                            LinkOrCreateActiveBatch();
+                            InsertRealtimeInfoEvent("T001", "Bắt đầu cấp liệu");
+                            lastAlarmReportTime = DateTime.MinValue;
+                        }
+                        else
+                        {
+                            // Double-Lock Stage Transitions (Timer == 0 AND Next Timer > 0)
+                            if (currentCongDoan == 1)
+                            {
+                                if (thoiGianCapLieu > 0) hasThoiGianCapLieuStarted = true;
+                                if (hasThoiGianCapLieuStarted && thoiGianCapLieu == 0 && thoiGianTron1 > 0)
+                                {
+                                    currentCongDoan = 2;
+                                    InsertRealtimeInfoEvent("T002", "Bắt đầu trộn lần 1");
+                                }
+                            }
+                            
+                            else if (currentCongDoan == 2)
+                            {
+                                if (thoiGianTron1 > 0) hasThoiGianTron1Started = true;
+                                if (hasThoiGianTron1Started && thoiGianTron1 == 0 && (thoiGianXaDay > 0 || thoiGianRungXaDay > 0 || thoiGianHutXa > 0))
+                                {
+                                    currentCongDoan = 3;
+                                    InsertRealtimeInfoEvent("T003", "Bắt đầu xả đáy");
+                                }
+                            }
+
+                            else if (currentCongDoan == 3)
+                            {
+                                if (thoiGianRungXaDay > 0)
+                                {
+                                    InsertRealtimeInfoEvent("T004", "Bắt đầu rung xả đáy");
+                                }
+                                if (thoiGianHutXa > 0)
+                                {
+                                    InsertRealtimeInfoEvent("T005", "Bắt đầu hút xả đáy");
+                                }
+
+                                if (thoiGianHutXa > 0) hasThoiGianHutXaStarted = true;
+                                if (hasThoiGianHutXaStarted && thoiGianHutXa == 0 && thoiGianTron2 > 0)
+                                {
+                                    currentCongDoan = 4;
+                                    InsertRealtimeInfoEvent("T006", "Bắt đầu trộn lần 2");
+                                }
+                            }
+
+                            else if (currentCongDoan == 4)
+                            {
+                                if (thoiGianTron2 > 0) hasThoiGianTron2Started = true;
+                                if (hasThoiGianTron2Started && thoiGianTron2 == 0 && (thoiGianXaHang > 0 || thoiGianRungXaHang > 0))
+                                {
+                                    currentCongDoan = 5;
+                                    InsertRealtimeInfoEvent("T007", "Bắt đầu xả hàng");
+                                }
+                            }
+
+                            else if (currentCongDoan == 5)
+                            {
+                                if (thoiGianRungXaHang > 0)
+                                {
+                                    InsertRealtimeInfoEvent("T008", "Bắt đầu rung xả hàng");
+                                }
+
+                                if (thoiGianRungXaHang > 0) hasThoiGianRungXaHangStarted = true;
+                                if (thoiGianXaHang > 0) hasThoiGianXaHangStarted = true;
+
+                                if (hasThoiGianRungXaHangStarted && thoiGianRungXaHang == 0) isThoiGianRungXaHangFinished = true;
+                                if (hasThoiGianXaHangStarted && thoiGianXaHang == 0) isThoiGianXaHangFinished = true;
+
+                                if (isThoiGianRungXaHangFinished && isThoiGianXaHangFinished)
+                                {
+                                    currentCongDoan = 0; // Return to Idle
+                                    InsertRealtimeInfoEvent("IDLE", "Xả liệu hoàn tất");
+                                    CompleteActiveBatch();
+                                }
+                            }
+                        }
                     }
                 }
 
                 if (currentCongDoan == 0) // Idle
                 {
-                    if (thoiGianCapLieu > 0)
+                    if (thoiGianCapLieu > 0 && !isStopped)
                     {
                         // New batch detected
                         currentQuyTrinh = GetMaxQuyTrinhFromDb() + 1;
@@ -511,6 +619,144 @@ namespace HinoTools.Data.Log
 
             double.TryParse(item.Tag.Value, out double val);
             return val;
+        }
+
+        private double GetSystemTagValue(string subTagName)
+        {
+            if (driver == null || Collection == null || Collection.Length == 0) return 0;
+
+            // 1. Try to find it in Collection first
+            var item = logItems.FirstOrDefault(x =>
+                string.Equals(x.Alias, subTagName, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(x.TagName, subTagName, StringComparison.OrdinalIgnoreCase) ||
+                x.TagName.EndsWith("." + subTagName, StringComparison.OrdinalIgnoreCase));
+
+            if (item != null)
+            {
+                if (item.Tag == null && driver != null)
+                {
+                    item.Tag = driver.GetTagByName(item.TagName);
+                }
+                if (item.Tag?.Value != null)
+                {
+                    double.TryParse(item.Tag.Value, out double val);
+                    return val;
+                }
+            }
+
+            // 2. If not found in Collection, build the full tag name from first tag's prefix
+            var firstTag = Collection[0].Split(';')[0];
+            var dotIndex = firstTag.IndexOf('.');
+            string taskName = dotIndex > 0 ? firstTag.Substring(0, dotIndex) : "AFChemTX01";
+            string fullTagName = string.Format("{0}.{1}", taskName, subTagName);
+
+            var tag = driver.GetTagByName(fullTagName);
+            if (tag?.Value != null)
+            {
+                double.TryParse(tag.Value, out double val);
+                return val;
+            }
+
+            return 0;
+        }
+
+        private void FailActiveBatch()
+        {
+            if (activeRunId == null) return;
+
+            try
+            {
+                dataAccess.ConnectionString = GetConnectionStringWithDb();
+                string nowStr = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+
+                // 1. Mark the active Run as 'Error'
+                string failRunQuery = string.Format("UPDATE `runs` SET `status` = 'Error', `end_time` = '{0}' WHERE `id` = {1}", nowStr, activeRunId.Value);
+                dataAccess.ExecuteNonQuery(failRunQuery);
+                System.Diagnostics.Debug.WriteLine(string.Format("[AlarmReportLogger] Marked Run ID {0} as Error.", activeRunId.Value));
+
+                // 2. Insert a compensating run for the same batch to ensure the batch target is met
+                try
+                {
+                    string infoQuery = string.Format("SELECT name, total_runs FROM `batches` WHERE `id` = {0}", activeBatchId.Value);
+                    var infoDt = dataAccess.ExecuteQuery(infoQuery);
+                    if (infoDt != null && infoDt.Rows.Count > 0)
+                    {
+                        string batchName = infoDt.Rows[0]["name"].ToString();
+                        int currentTotalRuns = Convert.ToInt32(infoDt.Rows[0]["total_runs"]);
+
+                        int newRunNumber = currentTotalRuns + 1;
+                        string newRunName = string.Format("{0}-Run{1:D2}", batchName, newRunNumber);
+
+                        // Increment total_runs in batches
+                        string updateBatchRunsQuery = string.Format("UPDATE `batches` SET `total_runs` = {0} WHERE `id` = {1}", newRunNumber, activeBatchId.Value);
+                        dataAccess.ExecuteNonQuery(updateBatchRunsQuery);
+
+                        // Insert new compensating run as Pending
+                        string insertCompensatingRunQuery = string.Format(
+                            "INSERT INTO `runs` (`batch_id`, `run_number`, `name`, `status`, `created_at`) VALUES ({0}, {1}, '{2}', 'Pending', NOW())",
+                            activeBatchId.Value, newRunNumber, newRunName);
+                        dataAccess.ExecuteNonQuery(insertCompensatingRunQuery);
+                        System.Diagnostics.Debug.WriteLine(string.Format("[AlarmReportLogger] Created compensating Run '{0}' (Run {1}) for Batch ID {2}.", newRunName, newRunNumber, activeBatchId.Value));
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine(string.Format("[AlarmReportLogger] ERROR creating compensating run: {0}", ex.Message));
+                }
+
+                // 3. Check if all runs in the parent Batch are finished (no Pending or Active runs left)
+                string checkRemainingQuery = string.Format("SELECT COUNT(*) FROM `runs` WHERE `batch_id` = {0} AND `status` IN ('Pending', 'Active')", activeBatchId.Value);
+                var remainingObj = dataAccess.ExecuteScalarQuery(checkRemainingQuery);
+                int remainingCount = remainingObj != null ? Convert.ToInt32(remainingObj) : 0;
+
+                if (remainingCount == 0)
+                {
+                    // If no remaining runs, complete the parent Batch
+                    string completeBatchQuery = string.Format("UPDATE `batches` SET `status` = 'Completed', `end_time` = '{0}' WHERE `id` = {1}", nowStr, activeBatchId.Value);
+                    dataAccess.ExecuteNonQuery(completeBatchQuery);
+                    System.Diagnostics.Debug.WriteLine(string.Format("[AlarmReportLogger] Completed Batch ID {0} since all its runs are completed/errored.", activeBatchId.Value));
+                }
+
+                // 4. Log a detailed alarm event to realtime_alarms
+                string currentStageName = CurrentCongDoanName;
+                string errorMessage = string.Format("Mẻ bị lỗi tại giai đoạn: {0} (Nhấn Stop/Lỗi hệ thống)", currentStageName);
+                InsertRealtimeErrorEvent(CurrentCongDoanCode, errorMessage);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(string.Format("[AlarmReportLogger] ERROR failing batch/run: {0}", ex.Message));
+            }
+            finally
+            {
+                activeRunId = null;
+                activeBatchId = null;
+            }
+        }
+
+        private bool InsertRealtimeErrorEvent(string stageName, string message)
+        {
+            try
+            {
+                if (!CreateDatabaseIfNotExists()) return false;
+
+                dataAccess.ConnectionString = GetConnectionStringWithDb();
+
+                string tblName = "realtime_alarms";
+                string batchIdValue = activeBatchId.HasValue ? activeBatchId.Value.ToString() : "NULL";
+                string runIdValue = activeRunId.HasValue ? activeRunId.Value.ToString() : "NULL";
+
+                var query = string.Format(
+                    "INSERT INTO `{0}` (`DateTime`, `DeviceName`, `TagName`, `Value`, `Threshold`, `Operator`, `Message`, `QuyTrinh`, `CongDoan`, `batchId`, `runId`, `Severity`) " +
+                    "VALUES ('{1:yyyy-MM-dd HH:mm:ss}', '{2}', 'System', 1, 0, '=', '{3}', {4}, '{5}', {6}, {7}, 'ALARM')",
+                    tblName, DateTime.Now, deviceName, message, currentQuyTrinh, stageName, batchIdValue, runIdValue);
+
+                return dataAccess.ExecuteNonQuery(query) >= 0;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(string.Format("[AlarmReportLogger] InsertRealtimeErrorEvent ERROR: {0}", ex.Message));
+                return false;
+            }
         }
 
         #endregion
@@ -777,8 +1023,8 @@ namespace HinoTools.Data.Log
                 dataAccess.ExecuteNonQuery(completeRunQuery);
                 System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] Completed Run ID {activeRunId.Value} successfully.");
 
-                // 2. Check if all runs in the parent Batch are completed
-                string checkRemainingQuery = $"SELECT COUNT(*) FROM `runs` WHERE `batch_id` = {activeBatchId.Value} AND `status` != 'Completed'";
+                // 2. Check if all runs in the parent Batch are finished (no Pending or Active runs left)
+                string checkRemainingQuery = $"SELECT COUNT(*) FROM `runs` WHERE `batch_id` = {activeBatchId.Value} AND `status` IN ('Pending', 'Active')";
                 var remainingObj = dataAccess.ExecuteScalarQuery(checkRemainingQuery);
                 int remainingCount = remainingObj != null ? Convert.ToInt32(remainingObj) : 0;
 

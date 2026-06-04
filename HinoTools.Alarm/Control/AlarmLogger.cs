@@ -212,17 +212,46 @@ namespace HinoTools.Alarm.Control
                         int activeRId = Convert.ToInt32(activeRes.Rows[0]["id"]);
                         int activeBId = Convert.ToInt32(activeRes.Rows[0]["batch_id"]);
 
-                        // Complete this run
-                        string completeRunQuery = $"UPDATE `runs` SET `status` = 'Completed', `end_time` = '{nowStr}' WHERE `id` = {activeRId}";
+                        // Mark this run as Error because it was aborted by a new run start
+                        string completeRunQuery = string.Format("UPDATE `runs` SET `status` = 'Error', `end_time` = '{0}' WHERE `id` = {1}", nowStr, activeRId);
                         this.dataAccess.ExecuteNonQuery(completeRunQuery);
 
-                        // Check if all runs in this batch are completed
-                        string checkRemQuery = $"SELECT COUNT(*) FROM `runs` WHERE `batch_id` = {activeBId} AND `status` != 'Completed'";
+                        // Create a compensating run for the parent batch
+                        try
+                        {
+                            string infoQuery = string.Format("SELECT name, total_runs FROM `batches` WHERE `id` = {0}", activeBId);
+                            var infoDt = this.dataAccess.ExecuteQuery(infoQuery);
+                            if (infoDt != null && infoDt.Rows.Count > 0)
+                            {
+                                string batchName = infoDt.Rows[0]["name"].ToString();
+                                int currentTotalRuns = Convert.ToInt32(infoDt.Rows[0]["total_runs"]);
+
+                                int newRunNumber = currentTotalRuns + 1;
+                                string newRunName = string.Format("{0}-Run{1:D2}", batchName, newRunNumber);
+
+                                // Update total_runs in batches
+                                string updateBatchRunsQuery = string.Format("UPDATE `batches` SET `total_runs` = {0} WHERE `id` = {1}", newRunNumber, activeBId);
+                                this.dataAccess.ExecuteNonQuery(updateBatchRunsQuery);
+
+                                // Insert new compensating run as Pending
+                                string insertCompensatingRunQuery = string.Format(
+                                    "INSERT INTO `runs` (`batch_id`, `run_number`, `name`, `status`, `created_at`) VALUES ({0}, {1}, '{2}', 'Pending', NOW())",
+                                    activeBId, newRunNumber, newRunName);
+                                this.dataAccess.ExecuteNonQuery(insertCompensatingRunQuery);
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            WriteDebugLog(string.Format("[GetActiveBatchAndRunId] ERROR creating compensating run: {0}", ex.Message));
+                        }
+
+                        // Check if all runs in this batch are finished (no Pending or Active runs left)
+                        string checkRemQuery = string.Format("SELECT COUNT(*) FROM `runs` WHERE `batch_id` = {0} AND `status` IN ('Pending', 'Active')", activeBId);
                         var remObj = this.dataAccess.ExecuteScalarQuery(checkRemQuery);
                         int remCount = remObj != null ? Convert.ToInt32(remObj) : 0;
                         if (remCount == 0)
                         {
-                            string completeBatchQuery = $"UPDATE `batches` SET `status` = 'Completed', `end_time` = '{nowStr}' WHERE `id` = {activeBId}";
+                            string completeBatchQuery = string.Format("UPDATE `batches` SET `status` = 'Completed', `end_time` = '{0}' WHERE `id` = {1}", nowStr, activeBId);
                             this.dataAccess.ExecuteNonQuery(completeBatchQuery);
                         }
                     }
