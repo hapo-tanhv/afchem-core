@@ -11,5 +11,11 @@
   - [x] Update `GetActiveBatchAndRunId` to set status of force-closed runs to 'Error' instead of 'Completed'
   - [x] Add compensating run creation logic in `GetActiveBatchAndRunId` when run is marked as 'Error'
   - [x] Update batch completion status check to look for ('Pending', 'Active') runs
+- [x] Update `BatchesHttpServer.cs` in `HinoTools.Data`
+  - [x] Add support for `runs` parameter (as alias of `runs_count`) in query and JSON body for API `POST /api/batches/create`
+- [x] Rename run suffix from `RunXX` to `MeXX` across the application
+  - [x] Change in `AlarmReportLogger.cs`
+  - [x] Change in `AlarmLogger.cs`
+  - [x] Change in `BatchesHttpServer.cs`
 - [x] Verification
   - [x] Compile using modern MSBuild (VS 2019)

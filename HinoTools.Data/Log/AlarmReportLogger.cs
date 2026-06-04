@@ -685,7 +685,7 @@ namespace HinoTools.Data.Log
                         int currentTotalRuns = Convert.ToInt32(infoDt.Rows[0]["total_runs"]);
 
                         int newRunNumber = currentTotalRuns + 1;
-                        string newRunName = string.Format("{0}-Run{1:D2}", batchName, newRunNumber);
+                        string newRunName = string.Format("{0}-Me{1:D2}", batchName, newRunNumber);
 
                         // Increment total_runs in batches
                         string updateBatchRunsQuery = string.Format("UPDATE `batches` SET `total_runs` = {0} WHERE `id` = {1}", newRunNumber, activeBatchId.Value);
@@ -878,7 +878,7 @@ namespace HinoTools.Data.Log
 
                 // Task 1.4: Historical data migration (One-time check and execution)
                 string migrateRunsSql = "INSERT INTO `runs` (`batch_id`, `run_number`, `name`, `status`, `start_time`, `end_time`, `created_at`) " +
-                                        "SELECT b.id, 1, CONCAT(b.name, '-Run01'), b.status, b.start_time, b.end_time, b.created_at " +
+                                        "SELECT b.id, 1, CONCAT(b.name, '-Me01'), b.status, b.start_time, b.end_time, b.created_at " +
                                         "FROM `batches` b " +
                                         "WHERE NOT EXISTS (SELECT 1 FROM `runs` r WHERE r.batch_id = b.id)";
                 int rows = dataAccess.ExecuteNonQuery(migrateRunsSql);
@@ -983,7 +983,7 @@ namespace HinoTools.Data.Log
                     }
 
                     // Insert corresponding Run and mark as Active immediately
-                    string fallbackRunName = $"{fallbackBatchName}-Run01";
+                    string fallbackRunName = $"{fallbackBatchName}-Me01";
                     string insertRunQuery = $"INSERT INTO `runs` (`batch_id`, `run_number`, `name`, `status`, `start_time`, `created_at`) " +
                                             $"VALUES ({activeBatchId.Value}, 1, '{fallbackRunName}', 'Active', '{DateTime.Now:yyyy-MM-dd HH:mm:ss}', NOW())";
                     dataAccess.ExecuteNonQuery(insertRunQuery);

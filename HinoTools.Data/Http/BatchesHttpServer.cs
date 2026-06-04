@@ -187,12 +187,12 @@ namespace HinoTools.Data.Http
                         quantity = 1;
                     }
 
-                    // Parse runs_count (default is 1)
+                    // Parse runs_count or runs (default is 1)
                     int runsCount = 1;
-                    var runsCountMatch = Regex.Match(body, "\"runs_count\"\\s*:\\s*(\\d+)", RegexOptions.IgnoreCase);
+                    var runsCountMatch = Regex.Match(body, "\"(runs_count|runs)\"\\s*:\\s*(\\d+)", RegexOptions.IgnoreCase);
                     if (runsCountMatch.Success)
                     {
-                        if (int.TryParse(runsCountMatch.Groups[1].Value, out int rc))
+                        if (int.TryParse(runsCountMatch.Groups[2].Value, out int rc))
                         {
                             runsCount = rc;
                         }
@@ -200,6 +200,10 @@ namespace HinoTools.Data.Http
                     else
                     {
                         var queryRunsCount = request.QueryString["runs_count"];
+                        if (string.IsNullOrEmpty(queryRunsCount))
+                        {
+                            queryRunsCount = request.QueryString["runs"];
+                        }
                         if (!string.IsNullOrEmpty(queryRunsCount) && int.TryParse(queryRunsCount, out int rc))
                         {
                             runsCount = rc;
@@ -267,7 +271,7 @@ namespace HinoTools.Data.Http
                                     var createdRuns = new System.Collections.Generic.List<string>();
                                     for (int r = 1; r <= runsCount; r++)
                                     {
-                                        string runName = $"{batchName}-Run{r:D2}";
+                                        string runName = $"{batchName}-Me{r:D2}";
                                         string insertRunQuery = "INSERT INTO `runs` (`batch_id`, `run_number`, `name`, `status`, `created_at`) " +
                                                                 "VALUES (@batch_id, @run_number, @name, 'Pending', NOW())";
                                         using (var runCmd = new MySqlCommand(insertRunQuery, conn))
@@ -538,7 +542,7 @@ namespace HinoTools.Data.Http
             {
                 // Create a run for each batch that doesn't have runs yet
                 string migrateRunsSql = "INSERT INTO `runs` (`batch_id`, `run_number`, `name`, `status`, `start_time`, `end_time`, `created_at`) " +
-                                        "SELECT b.id, 1, CONCAT(b.name, '-Run01'), b.status, b.start_time, b.end_time, b.created_at " +
+                                        "SELECT b.id, 1, CONCAT(b.name, '-Me01'), b.status, b.start_time, b.end_time, b.created_at " +
                                         "FROM `batches` b " +
                                         "WHERE NOT EXISTS (SELECT 1 FROM `runs` r WHERE r.batch_id = b.id)";
                 using (var cmd = new MySqlCommand(migrateRunsSql, conn))

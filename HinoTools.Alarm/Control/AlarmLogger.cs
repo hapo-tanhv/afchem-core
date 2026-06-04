@@ -227,7 +227,7 @@ namespace HinoTools.Alarm.Control
                                 int currentTotalRuns = Convert.ToInt32(infoDt.Rows[0]["total_runs"]);
 
                                 int newRunNumber = currentTotalRuns + 1;
-                                string newRunName = string.Format("{0}-Run{1:D2}", batchName, newRunNumber);
+                                string newRunName = string.Format("{0}-Me{1:D2}", batchName, newRunNumber);
 
                                 // Update total_runs in batches
                                 string updateBatchRunsQuery = string.Format("UPDATE `batches` SET `total_runs` = {0} WHERE `id` = {1}", newRunNumber, activeBId);
@@ -329,7 +329,7 @@ namespace HinoTools.Alarm.Control
                     batchId = Convert.ToInt32(lastBatchIdObj);
                 }
 
-                string fallbackRunName = $"{fallbackBatchName}-Run01";
+                string fallbackRunName = $"{fallbackBatchName}-Me01";
                 string insertRun = $"INSERT INTO `runs` (`batch_id`, `run_number`, `name`, `status`, `start_time`, `created_at`) " +
                                    $"VALUES ({batchId.Value}, 1, '{fallbackRunName}', 'Active', '{nowStr}', NOW())";
                 this.dataAccess.ExecuteNonQuery(insertRun);

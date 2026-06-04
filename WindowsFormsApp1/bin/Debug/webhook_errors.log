@@ -23,3 +23,5 @@
 [2026-06-02 13:55:02] Error starting Webhook server: Failed to listen on prefix 'http://*:5600/' because it conflicts with an existing registration on the machine.
 [2026-06-04 09:43:28] Error starting Webhook server: Failed to listen on prefix 'http://*:5600/' because it conflicts with an existing registration on the machine.
 [2026-06-04 14:46:27] Error starting Webhook server: Failed to listen on prefix 'http://*:5600/' because it conflicts with an existing registration on the machine.
+[2026-06-04 14:54:49] Error starting Webhook server: Failed to listen on prefix 'http://*:5600/' because it conflicts with an existing registration on the machine.
+[2026-06-04 14:59:42] Error starting Webhook server: Failed to listen on prefix 'http://*:5600/' because it conflicts with an existing registration on the machine.
