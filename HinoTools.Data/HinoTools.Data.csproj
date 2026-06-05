@@ -47,6 +47,7 @@
     <Reference Include="System.Data" />
     <Reference Include="System.Net.Http" />
     <Reference Include="System.Xml" />
+    <Reference Include="System.Web.Extensions" />
     <Reference Include="ToolExtensions">
       <HintPath>C:\Program Files\ATPro\ATSCADA\ToolExtensions.dll</HintPath>
     </Reference>

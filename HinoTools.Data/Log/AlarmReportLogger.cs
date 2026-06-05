@@ -51,6 +51,7 @@ namespace HinoTools.Data.Log
         private int? activeRunId = null;
 
         private DateTime lastAlarmReportTime = DateTime.MinValue;
+        private double[] lastSetpoints = new double[8] { -1, -1, -1, -1, -1, -1, -1, -1 };
 
         #endregion
 
@@ -336,6 +337,9 @@ namespace HinoTools.Data.Log
                     System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] Sync active run ERROR: {ex.Message}");
                 }
 
+                // Check and update HMI/PLC setpoints in the runs table
+                CheckAndUpdateSetpoints();
+
                 double thoiGianCapLieu = GetTagValueByAlias("ThoiGianCapLieu");
                 double thoiGianTron1 = GetTagValueByAlias("ThoiGianTron1");
                 double thoiGianHutXa = GetTagValueByAlias("ThoiGianHutXaDay");
@@ -592,6 +596,36 @@ namespace HinoTools.Data.Log
             hasThoiGianXaHangStarted = false;
             isThoiGianRungXaHangFinished = false;
             isThoiGianXaHangFinished = false;
+
+            if (lastSetpoints != null)
+            {
+                for (int i = 0; i < lastSetpoints.Length; i++)
+                {
+                    lastSetpoints[i] = -1;
+                }
+            }
+        }
+
+        private string GetScaledValueString(string alias, string rawValue)
+        {
+            if (string.IsNullOrEmpty(rawValue)) return "0";
+
+            if (string.Equals(alias, "CaiDatApSuat", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(alias, "DatNguongNhietDoMoiTruong", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(alias, "DatNguongDoAmMoiTruong", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(alias, "ApSuat", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(alias, "NhietDoMoiTruong", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(alias, "DoAmMoiTruong", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(alias, "NhietDoBonTronTren", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(alias, "NhietDoBonTronGiua", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(alias, "NhietDoBonTronDuoi", StringComparison.OrdinalIgnoreCase))
+            {
+                if (double.TryParse(rawValue, out double val))
+                {
+                    return (val / 10.0).ToString(System.Globalization.CultureInfo.InvariantCulture);
+                }
+            }
+            return rawValue;
         }
 
         /// <summary>
@@ -618,6 +652,20 @@ namespace HinoTools.Data.Log
             if (item.Tag?.Value == null) return 0;
 
             double.TryParse(item.Tag.Value, out double val);
+
+            if (string.Equals(alias, "CaiDatApSuat", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(alias, "DatNguongNhietDoMoiTruong", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(alias, "DatNguongDoAmMoiTruong", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(alias, "ApSuat", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(alias, "NhietDoMoiTruong", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(alias, "DoAmMoiTruong", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(alias, "NhietDoBonTronTren", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(alias, "NhietDoBonTronGiua", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(alias, "NhietDoBonTronDuoi", StringComparison.OrdinalIgnoreCase))
+            {
+                val = val / 10.0;
+            }
+
             return val;
         }
 
@@ -640,6 +688,18 @@ namespace HinoTools.Data.Log
                 if (item.Tag?.Value != null)
                 {
                     double.TryParse(item.Tag.Value, out double val);
+                    if (string.Equals(subTagName, "CaiDatApSuat", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(subTagName, "DatNguongNhietDoMoiTruong", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(subTagName, "DatNguongDoAmMoiTruong", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(subTagName, "ApSuat", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(subTagName, "NhietDoMoiTruong", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(subTagName, "DoAmMoiTruong", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(subTagName, "NhietDoBonTronTren", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(subTagName, "NhietDoBonTronGiua", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(subTagName, "NhietDoBonTronDuoi", StringComparison.OrdinalIgnoreCase))
+                    {
+                        val = val / 10.0;
+                    }
                     return val;
                 }
             }
@@ -654,10 +714,81 @@ namespace HinoTools.Data.Log
             if (tag?.Value != null)
             {
                 double.TryParse(tag.Value, out double val);
+                if (string.Equals(subTagName, "CaiDatApSuat", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(subTagName, "DatNguongNhietDoMoiTruong", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(subTagName, "DatNguongDoAmMoiTruong", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(subTagName, "ApSuat", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(subTagName, "NhietDoMoiTruong", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(subTagName, "DoAmMoiTruong", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(subTagName, "NhietDoBonTronTren", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(subTagName, "NhietDoBonTronGiua", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(subTagName, "NhietDoBonTronDuoi", StringComparison.OrdinalIgnoreCase))
+                {
+                    val = val / 10.0;
+                }
                 return val;
             }
 
             return 0;
+        }
+
+        private void CheckAndUpdateSetpoints()
+        {
+            if (activeRunId == null) return;
+
+            try
+            {
+                // Read 8 setpoints from the driver
+                double sp1 = GetSystemTagValue("ThoiGianCaiDatCapLieu");
+                double sp2 = GetSystemTagValue("ThoiGianCaiDatTron1");
+                double sp3 = GetSystemTagValue("ThoiGianCaiDatXaDay");
+                double sp4 = GetSystemTagValue("ThoiGianCaiDatRungXaDay");
+                double sp5 = GetSystemTagValue("ThoiGianCaiDatHutXaDayThem");
+                double sp6 = GetSystemTagValue("ThoiGianCaiDatTron2");
+                double sp7 = GetSystemTagValue("ThoiGianCaiDatXaHang");
+                double sp8 = GetSystemTagValue("ThoiGianCaiDatRungXaHang");
+
+                // Check if any value has changed compared to lastSetpoints cache
+                bool hasChanged = false;
+                if (sp1 != lastSetpoints[0] || sp2 != lastSetpoints[1] || sp3 != lastSetpoints[2] ||
+                    sp4 != lastSetpoints[3] || sp5 != lastSetpoints[4] || sp6 != lastSetpoints[5] ||
+                    sp7 != lastSetpoints[6] || sp8 != lastSetpoints[7])
+                {
+                    hasChanged = true;
+                }
+
+                if (hasChanged)
+                {
+                    dataAccess.ConnectionString = GetConnectionStringWithDb();
+                    string updateSql = "UPDATE `runs` SET " +
+                                       $"`sp_thoi_gian_cap_lieu` = {(int)sp1}, " +
+                                       $"`sp_thoi_gian_tron1` = {(int)sp2}, " +
+                                       $"`sp_thoi_gian_xa_day` = {(int)sp3}, " +
+                                       $"`sp_thoi_gian_rung_xa_day` = {(int)sp4}, " +
+                                       $"`sp_thoi_gian_hut_xa_day_them` = {(int)sp5}, " +
+                                       $"`sp_thoi_gian_tron2` = {(int)sp6}, " +
+                                       $"`sp_thoi_gian_xa_hang` = {(int)sp7}, " +
+                                       $"`sp_thoi_gian_rung_xa_hang` = {(int)sp8} " +
+                                       $"WHERE `id` = {activeRunId.Value}";
+                    dataAccess.ExecuteNonQuery(updateSql);
+
+                    // Update cached values
+                    lastSetpoints[0] = sp1;
+                    lastSetpoints[1] = sp2;
+                    lastSetpoints[2] = sp3;
+                    lastSetpoints[3] = sp4;
+                    lastSetpoints[4] = sp5;
+                    lastSetpoints[5] = sp6;
+                    lastSetpoints[6] = sp7;
+                    lastSetpoints[7] = sp8;
+
+                    System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] Updated setpoints for Run ID {activeRunId.Value} in database due to change or initialization.");
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] ERROR checking/updating setpoints: {ex.Message}");
+            }
         }
 
         private void FailActiveBatch()
@@ -875,6 +1006,44 @@ namespace HinoTools.Data.Log
                                             "  INDEX `idx_runs_status` (`status`)" +
                                             ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;";
                 dataAccess.ExecuteNonQuery(createRunsTableSql);
+
+                // Add setpoint columns to runs table if they don't exist
+                string[] columnsToAdd = new string[]
+                {
+                    "`sp_thoi_gian_cap_lieu` INT NOT NULL DEFAULT 0 AFTER `status`",
+                    "`sp_thoi_gian_tron1` INT NOT NULL DEFAULT 0 AFTER `sp_thoi_gian_cap_lieu`",
+                    "`sp_thoi_gian_xa_day` INT NOT NULL DEFAULT 0 AFTER `sp_thoi_gian_tron1`",
+                    "`sp_thoi_gian_rung_xa_day` INT NOT NULL DEFAULT 0 AFTER `sp_thoi_gian_xa_day`",
+                    "`sp_thoi_gian_hut_xa_day_them` INT NOT NULL DEFAULT 0 AFTER `sp_thoi_gian_rung_xa_day`",
+                    "`sp_thoi_gian_tron2` INT NOT NULL DEFAULT 0 AFTER `sp_thoi_gian_hut_xa_day_them`",
+                    "`sp_thoi_gian_xa_hang` INT NOT NULL DEFAULT 0 AFTER `sp_thoi_gian_tron2`",
+                    "`sp_thoi_gian_rung_xa_hang` INT NOT NULL DEFAULT 0 AFTER `sp_thoi_gian_xa_hang`"
+                };
+
+                string[] columnNames = new string[] {
+                    "sp_thoi_gian_cap_lieu", "sp_thoi_gian_tron1", "sp_thoi_gian_xa_day",
+                    "sp_thoi_gian_rung_xa_day", "sp_thoi_gian_hut_xa_day_them", "sp_thoi_gian_tron2",
+                    "sp_thoi_gian_xa_hang", "sp_thoi_gian_rung_xa_hang"
+                };
+
+                for (int i = 0; i < columnNames.Length; i++)
+                {
+                    try
+                    {
+                        string checkColSql = $"SHOW COLUMNS FROM `runs` LIKE '{columnNames[i]}'";
+                        var colResult = dataAccess.ExecuteScalarQuery(checkColSql);
+                        if (colResult == null || colResult == DBNull.Value)
+                        {
+                            string alterSql = $"ALTER TABLE `runs` ADD COLUMN {columnsToAdd[i]}";
+                            dataAccess.ExecuteNonQuery(alterSql);
+                            System.Diagnostics.Debug.WriteLine($"[Migration] Added column {columnNames[i]} to runs table successfully.");
+                        }
+                    }
+                    catch (Exception colEx)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[Migration] ERROR adding column {columnNames[i]} to runs: {colEx.Message}");
+                    }
+                }
 
                 // Task 1.4: Historical data migration (One-time check and execution)
                 string migrateRunsSql = "INSERT INTO `runs` (`batch_id`, `run_number`, `name`, `status`, `start_time`, `end_time`, `created_at`) " +
@@ -1119,6 +1288,7 @@ namespace HinoTools.Data.Log
                         continue;
 
                     var value = item.Tag?.Value ?? "0";
+                    value = GetScaledValueString(item.Alias, value);
                     fieldBuilder.Append($", `{item.Alias}`");
                     valueBuilder.Append($", '{value}'");
                 }

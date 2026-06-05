@@ -242,6 +242,19 @@ namespace HinoTools.Data.Log
                     if (item.Tag?.Value == null) continue;
                     if (!double.TryParse(item.Tag.Value, out currentValue)) continue;
 
+                    if (string.Equals(item.Alias, "CaiDatApSuat", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(item.Alias, "DatNguongNhietDoMoiTruong", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(item.Alias, "DatNguongDoAmMoiTruong", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(item.Alias, "ApSuat", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(item.Alias, "NhietDoMoiTruong", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(item.Alias, "DoAmMoiTruong", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(item.Alias, "NhietDoBonTronTren", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(item.Alias, "NhietDoBonTronGiua", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(item.Alias, "NhietDoBonTronDuoi", StringComparison.OrdinalIgnoreCase))
+                    {
+                        currentValue = currentValue / 10.0;
+                    }
+
                     bool isViolating = EvaluateThreshold(currentValue, item.Operator, item.Threshold);
                     bool wasAlarming;
                     alarmActiveStates.TryGetValue(item.Alias, out wasAlarming);

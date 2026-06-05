@@ -1,21 +1,19 @@
-# Task List - Stop/Run Logic Integration
+# Task List - Setpoints Logging and Dynamic Updates
 
-- [x] Modify `AlarmReportLogger.cs` in `HinoTools.Data`
-  - [x] Add `stopStartTime` field and `StopTimeout` property
-  - [x] Implement `GetSystemTagValue(string subTagName)` helper method
-  - [x] Implement `FailActiveBatch()` method to set status to 'Error' and insert compensating run
-  - [x] Implement `InsertRealtimeErrorEvent(string stageName, string message)`
-  - [x] Modify `PollAndLog()` to implement the Stop/Reset check, flag resets, and Double-Lock stage transitions
-  - [x] Update `CompleteActiveBatch()` to check for status in ('Pending', 'Active')
-- [x] Modify `AlarmLogger.cs` in `HinoTools.Alarm`
-  - [x] Update `GetActiveBatchAndRunId` to set status of force-closed runs to 'Error' instead of 'Completed'
-  - [x] Add compensating run creation logic in `GetActiveBatchAndRunId` when run is marked as 'Error'
-  - [x] Update batch completion status check to look for ('Pending', 'Active') runs
-- [x] Update `BatchesHttpServer.cs` in `HinoTools.Data`
-  - [x] Add support for `runs` parameter (as alias of `runs_count`) in query and JSON body for API `POST /api/batches/create`
-- [x] Rename run suffix from `RunXX` to `MeXX` across the application
-  - [x] Change in `AlarmReportLogger.cs`
-  - [x] Change in `AlarmLogger.cs`
-  - [x] Change in `BatchesHttpServer.cs`
-- [x] Verification
-  - [x] Compile using modern MSBuild (VS 2019)
+- [x] Database Schema Migration
+  - [x] Update `EnsureBatchesTableExists()` in `AlarmReportLogger.cs` to add 8 columns (`sp_thoi_gian_...`) to the `runs` table
+- [x] Implement Setpoints Tracking
+  - [x] Add `lastSetpoints` cache array at the class level in `AlarmReportLogger.cs`
+  - [x] Update `ResetFlags()` in `AlarmReportLogger.cs` to reset the cache array to `-1`
+  - [x] Implement `CheckAndUpdateSetpoints()` helper in `AlarmReportLogger.cs` to poll and update setpoint values when changed
+  - [x] Update `PollAndLog()` in `AlarmReportLogger.cs` to call `CheckAndUpdateSetpoints()` on each poll cycle
+- [x] Compilation & Verification
+  - [x] Rebuild the solution using MSBuild 2019
+  - [x] Verify database updates on start and when setpoint changes occur
+
+- [x] Register Scaling (Divide by 10)
+  - [x] Create scaling helper method in `AlarmReportLogger.cs`
+  - [x] Implement scaling in `AlarmReportLogger.cs` value resolvers & `InsertAlarmReport()`
+  - [x] Implement scaling in `RealtimeThresholdLogger.cs` inside `ScanAndLog()` before evaluation and insert
+  - [x] Compile and verify solution rebuild
+
