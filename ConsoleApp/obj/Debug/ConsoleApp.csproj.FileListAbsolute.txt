@@ -76,6 +76,6 @@ C:\Users\Admin\Desktop\HinoTools.Alarm_27092023_Test\ConsoleApp\obj\Debug\Consol
 C:\Users\tanhv\Project\HinoTools.Alarm_27092023_Test\HinoTools.Alarm_27092023_Test\ConsoleApp\bin\Debug\ConsoleApp.exe.config
 C:\Users\tanhv\Project\HinoTools.Alarm_27092023_Test\HinoTools.Alarm_27092023_Test\ConsoleApp\bin\Debug\ConsoleApp.exe
 C:\Users\tanhv\Project\HinoTools.Alarm_27092023_Test\HinoTools.Alarm_27092023_Test\ConsoleApp\bin\Debug\ConsoleApp.pdb
-C:\Users\tanhv\Project\HinoTools.Alarm_27092023_Test\HinoTools.Alarm_27092023_Test\ConsoleApp\obj\Debug\ConsoleApp.csproj.CoreCompileInputs.cache
 C:\Users\tanhv\Project\HinoTools.Alarm_27092023_Test\HinoTools.Alarm_27092023_Test\ConsoleApp\obj\Debug\ConsoleApp.exe
 C:\Users\tanhv\Project\HinoTools.Alarm_27092023_Test\HinoTools.Alarm_27092023_Test\ConsoleApp\obj\Debug\ConsoleApp.pdb
+C:\Users\tanhv\Project\HinoTools.Alarm_27092023_Test\HinoTools.Alarm_27092023_Test\ConsoleApp\obj\Debug\ConsoleApp.csproj.CoreCompileInputs.cache

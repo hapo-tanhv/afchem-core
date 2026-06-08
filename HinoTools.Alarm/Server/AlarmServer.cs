@@ -204,7 +204,7 @@ namespace HinoTools.Alarm.Server
 
                         dataAccess.ExecuteNonQuery(
                             $"UPDATE `{TableLog}` SET `Status` = @Status, `RestoreTime` = @RestoreTime WHERE `ID` = @ID",
-                            "NORMAL",
+                            "Resolved",
                             item.RestoreTime,
                             inactiveItem.ID);
                         return;

@@ -373,11 +373,85 @@ namespace HinoTools.Alarm.Control
                 string deviceName = ExtractDeviceName(alarmItem.Param.TagName);
                 bool isNewRunStart = alarmItem.Param.TagName.EndsWith("ThoiGianCapLieu", StringComparison.OrdinalIgnoreCase) 
                                        && alarmItem.Status == AlarmStatus.ALARM;
+
+                // Check if an active alarm for this tag already exists in database for the active run of this device
+                string activeAlarmId = null;
+                int? existingActiveRunId = null;
+                try
+                {
+                    string activeRunQuery = string.Format(
+                        "SELECT r.id FROM `runs` r JOIN `batches` b ON r.batch_id = b.id WHERE b.device_name = '{0}' AND r.status = 'Active' ORDER BY r.id DESC LIMIT 1",
+                        deviceName);
+                    var activeRes = this.dataAccess.ExecuteQuery(activeRunQuery);
+                    if (activeRes != null && activeRes.Rows.Count > 0)
+                    {
+                        existingActiveRunId = Convert.ToInt32(activeRes.Rows[0]["id"]);
+
+                        string checkActiveSql = string.Format(
+                            "SELECT `ID` FROM `{0}` WHERE `TagName` = '{1}' AND `runId` = {2} AND (`Status` = 'Alarm' OR `RestoreTime` IS NULL) ORDER BY `OccurrenceTime` DESC LIMIT 1",
+                            TableName, alarmItem.Param.TagName, existingActiveRunId.Value);
+                        var activeAlarmRes = this.dataAccess.ExecuteQuery(checkActiveSql);
+                        if (activeAlarmRes != null && activeAlarmRes.Rows.Count > 0)
+                        {
+                            activeAlarmId = activeAlarmRes.Rows[0]["ID"].ToString();
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    WriteDebugLog(string.Format("[InsertAlarm] Error pre-checking active alarm: {0}", ex.Message));
+                }
+
+                // If an active alarm already exists for this tag in the active run, it is a restart, not a new run start
+                if (activeAlarmId != null)
+                {
+                    isNewRunStart = false;
+                }
+
                 int? batchId;
                 int? runId;
                 GetActiveBatchAndRunId(deviceName, isNewRunStart, out batchId, out runId);
                 string batchIdValue = batchId.HasValue ? batchId.Value.ToString() : "null";
                 string runIdValue = runId.HasValue ? runId.Value.ToString() : "null";
+
+                // Update activeAlarmId using the resolved runId if not already found via active run
+                if (activeAlarmId == null && runId.HasValue)
+                {
+                    try
+                    {
+                        string checkActiveSql = string.Format(
+                            "SELECT `ID` FROM `{0}` WHERE `TagName` = '{1}' AND `runId` = {2} AND (`Status` = 'Alarm' OR `RestoreTime` IS NULL) ORDER BY `OccurrenceTime` DESC LIMIT 1",
+                            TableName, alarmItem.Param.TagName, runId.Value);
+                        var activeAlarmRes = this.dataAccess.ExecuteQuery(checkActiveSql);
+                        if (activeAlarmRes != null && activeAlarmRes.Rows.Count > 0)
+                        {
+                            activeAlarmId = activeAlarmRes.Rows[0]["ID"].ToString();
+                        }
+                    }
+                    catch { }
+                }
+
+                if (alarmItem.Status == AlarmStatus.ALARM)
+                {
+                    if (activeAlarmId != null)
+                    {
+                        WriteDebugLog(string.Format("[InsertAlarm] Active alarm already exists in database with ID: '{0}'. Skipping duplicate alarm insert.", activeAlarmId));
+                        return; // Skip duplicate active alarm insertion
+                    }
+                }
+                else // Resolved
+                {
+                    if (activeAlarmId != null)
+                    {
+                        string updateSql = string.Format(
+                            "UPDATE `{0}` SET `RestoreTime` = {1}, `Status` = '{2}' WHERE `ID` = '{3}'",
+                            TableName, restoreTime, status, activeAlarmId);
+                        WriteDebugLog(string.Format("[InsertAlarm] Updating existing active alarm ID: '{0}' to Resolved. Query: {1}", activeAlarmId, updateSql));
+                        int rowsUpdated = this.dataAccess.ExecuteNonQuery(updateSql);
+                        WriteDebugLog(string.Format("[InsertAlarm] Update success. Rows affected: {0}", rowsUpdated));
+                        return; // Skip insert, we updated the existing one instead
+                    }
+                }
 
                 var query = $"insert into {TableName} " +
                     $"(`ID`, `OccurrenceTime`, `RestoreTime`, `TagName`, `TagNo`, `Location`, `Description`, `Status`, `FaultCode`, `batchId`, `runId`) " +

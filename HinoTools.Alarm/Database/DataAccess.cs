@@ -1,4 +1,4 @@
-﻿using MySql.Data.MySqlClient;
+using MySql.Data.MySqlClient;
 using System;
 using System.Data;
 using System.Linq;
@@ -38,8 +38,11 @@ namespace HinoTools.Alarm.Database
                     cmd.CommandType = CommandType.Text;
                     cmd.CommandText = query;
 
-                    string[] querySplit = query.Split(' ');
-                    string[] paramNames = querySplit.Where(x => x.StartsWith("@")).ToArray();
+                    string[] querySplit = query.Split(new char[] { ' ', '\r', '\n', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+                    string[] paramNames = querySplit
+                        .Where(x => x.StartsWith("@"))
+                        .Select(x => x.TrimEnd(',', ';', ')', ']', '\r', '\n'))
+                        .ToArray();
 
                     if (parameters.Length == paramNames.Length)
                     {

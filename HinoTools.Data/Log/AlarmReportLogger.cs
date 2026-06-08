@@ -38,6 +38,16 @@ namespace HinoTools.Data.Log
         private bool isThoiGianRungXaHangFinished = false;
         private bool isThoiGianXaHangFinished = false;
 
+        // Previous values for stage duration alarm falling edge check
+        private double prevCapLieu = 0;
+        private double prevTron1 = 0;
+        private double prevXaDay = 0;
+        private double prevRungXaDay = 0;
+        private double prevHutXaDay = 0;
+        private double prevTron2 = 0;
+        private double prevXaHang = 0;
+        private double prevRungXaHang = 0;
+
         // Tracking for stop/pause
         private DateTime? stopStartTime = null;
 
@@ -359,6 +369,19 @@ namespace HinoTools.Data.Log
                 double thoiGianXaDay = GetTagValueByAlias("ThoiGianXaDay");
                 double thoiGianRungXaDay = GetTagValueByAlias("ThoiGianRungXaDay");
 
+                // Falling edge detection for stage duration alarms
+                if (activeRunId != null)
+                {
+                    if (prevCapLieu > 0 && thoiGianCapLieu == 0) CheckAndLogStageDurationAlarm("T001", prevCapLieu);
+                    if (prevTron1 > 0 && thoiGianTron1 == 0) CheckAndLogStageDurationAlarm("T002", prevTron1);
+                    if (prevXaDay > 0 && thoiGianXaDay == 0) CheckAndLogStageDurationAlarm("T003", prevXaDay);
+                    if (prevRungXaDay > 0 && thoiGianRungXaDay == 0) CheckAndLogStageDurationAlarm("T004", prevRungXaDay);
+                    if (prevHutXaDay > 0 && thoiGianHutXa == 0) CheckAndLogStageDurationAlarm("T005", prevHutXaDay);
+                    if (prevTron2 > 0 && thoiGianTron2 == 0) CheckAndLogStageDurationAlarm("T006", prevTron2);
+                    if (prevXaHang > 0 && thoiGianXaHang == 0) CheckAndLogStageDurationAlarm("T007", prevXaHang);
+                    if (prevRungXaHang > 0 && thoiGianRungXaHang == 0) CheckAndLogStageDurationAlarm("T008", prevRungXaHang);
+                }
+
                 // 1. Check for Reset event (Stop = 1 and active stage timer is reset to 0)
                 bool isReset = false;
                 if (currentCongDoan > 0 && currentCongDoan < 5 && isStopped)
@@ -575,6 +598,16 @@ namespace HinoTools.Data.Log
                     lastAlarmReportTime = DateTime.MinValue;
                 }
 
+                // Update previous values for next polling cycle
+                prevCapLieu = thoiGianCapLieu;
+                prevTron1 = thoiGianTron1;
+                prevXaDay = thoiGianXaDay;
+                prevRungXaDay = thoiGianRungXaDay;
+                prevHutXaDay = thoiGianHutXa;
+                prevTron2 = thoiGianTron2;
+                prevXaHang = thoiGianXaHang;
+                prevRungXaHang = thoiGianRungXaHang;
+
                 // Keep polling interval at 1 second always to monitor stage transitions in real-time
                 tmrLog.Interval = 1000;
                 tmrLog.Start();
@@ -596,6 +629,15 @@ namespace HinoTools.Data.Log
             hasThoiGianXaHangStarted = false;
             isThoiGianRungXaHangFinished = false;
             isThoiGianXaHangFinished = false;
+
+            prevCapLieu = 0;
+            prevTron1 = 0;
+            prevXaDay = 0;
+            prevRungXaDay = 0;
+            prevHutXaDay = 0;
+            prevTron2 = 0;
+            prevXaHang = 0;
+            prevRungXaHang = 0;
 
             if (lastSetpoints != null)
             {
@@ -876,9 +918,23 @@ namespace HinoTools.Data.Log
                 string batchIdValue = activeBatchId.HasValue ? activeBatchId.Value.ToString() : "NULL";
                 string runIdValue = activeRunId.HasValue ? activeRunId.Value.ToString() : "NULL";
 
+                // Check for duplicate active error alarm (once per run)
+                if (activeRunId.HasValue)
+                {
+                    string checkDupQuery = string.Format(
+                        "SELECT COUNT(*) FROM `{0}` WHERE `runId` = {1} AND `TagName` = 'System' AND `CongDoan` = '{2}' AND `Severity` = 'ALARM'",
+                        tblName, activeRunId.Value, stageName);
+                    var dupObj = dataAccess.ExecuteScalarQuery(checkDupQuery);
+                    if (dupObj != null && dupObj != DBNull.Value && Convert.ToInt32(dupObj) > 0)
+                    {
+                        System.Diagnostics.Debug.WriteLine(string.Format("[AlarmReportLogger] Error event for stage '{0}' already logged in this run. Skipping duplicate.", stageName));
+                        return true;
+                    }
+                }
+
                 var query = string.Format(
-                    "INSERT INTO `{0}` (`DateTime`, `DeviceName`, `TagName`, `Value`, `Threshold`, `Operator`, `Message`, `QuyTrinh`, `CongDoan`, `batchId`, `runId`, `Severity`) " +
-                    "VALUES ('{1:yyyy-MM-dd HH:mm:ss}', '{2}', 'System', 1, 0, '=', '{3}', {4}, '{5}', {6}, {7}, 'ALARM')",
+                    "INSERT INTO `{0}` (`DateTime`, `DeviceName`, `TagName`, `Value`, `Threshold`, `Operator`, `Message`, `QuyTrinh`, `CongDoan`, `batchId`, `runId`, `Severity`, `restore_time`) " +
+                    "VALUES ('{1:yyyy-MM-dd HH:mm:ss}', '{2}', 'System', 1, 0, '=', '{3}', {4}, '{5}', {6}, {7}, 'ALARM', '{1:yyyy-MM-dd HH:mm:ss}')",
                     tblName, DateTime.Now, deviceName, message, currentQuyTrinh, stageName, batchIdValue, runIdValue);
 
                 return dataAccess.ExecuteNonQuery(query) >= 0;
@@ -1451,6 +1507,122 @@ namespace HinoTools.Data.Log
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] InsertRealtimeInfoEvent ERROR: {ex.Message}");
+                return false;
+            }
+        }
+
+        private void CheckAndLogStageDurationAlarm(string tagNo, double actualDuration)
+        {
+            if (activeRunId == null) return;
+
+            string spColumn = GetSetpointColumnName(tagNo);
+            if (string.IsNullOrEmpty(spColumn)) return;
+
+            try
+            {
+                dataAccess.ConnectionString = GetConnectionStringWithDb();
+
+                // 1. Get Setpoint from runs table
+                string getSetpointQuery = string.Format("SELECT `{0}` FROM `runs` WHERE `id` = {1}", spColumn, activeRunId.Value);
+                var spObj = dataAccess.ExecuteScalarQuery(getSetpointQuery);
+                if (spObj == null || spObj == DBNull.Value) return;
+                double setpoint = Convert.ToDouble(spObj);
+
+                // 2. Get Threshold and full TagName from alarmsettings table
+                string getSettingQuery = string.Format("SELECT `TagName`, `Value` FROM `alarmsettings` WHERE `TagNo` = '{0}' AND `TagName` LIKE '%{1}%' LIMIT 1", tagNo, deviceName);
+                var dtSetting = dataAccess.ExecuteQuery(getSettingQuery);
+                if (dtSetting == null || dtSetting.Rows.Count == 0) return;
+
+                string alarmTagName = dtSetting.Rows[0]["TagName"].ToString();
+                string thresholdStr = dtSetting.Rows[0]["Value"].ToString();
+                double threshold = 0;
+                double.TryParse(thresholdStr, out threshold);
+
+                // 3. Compare: |Actual - Setpoint| > Threshold
+                double diff = Math.Abs(actualDuration - setpoint);
+                if (diff > threshold)
+                {
+                    string stageDisplayName = GetStageDisplayName(tagNo);
+                    string message = string.Format("[Cảnh báo] Giai đoạn {0} có thời gian thực tế ({1}s) chênh lệch vượt ngưỡng cho phép ({2}s) so với cài đặt ({3}s).",
+                        stageDisplayName, actualDuration, threshold, setpoint);
+
+                    InsertRealtimeStageAlarm(alarmTagName, actualDuration, threshold, message, tagNo);
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(string.Format("[AlarmReportLogger] CheckAndLogStageDurationAlarm ERROR: {0}", ex.Message));
+            }
+        }
+
+        private string GetSetpointColumnName(string tagNo)
+        {
+            switch (tagNo)
+            {
+                case "T001": return "sp_thoi_gian_cap_lieu";
+                case "T002": return "sp_thoi_gian_tron1";
+                case "T003": return "sp_thoi_gian_xa_day";
+                case "T004": return "sp_thoi_gian_rung_xa_day";
+                case "T005": return "sp_thoi_gian_hut_xa_day_them";
+                case "T006": return "sp_thoi_gian_tron2";
+                case "T007": return "sp_thoi_gian_xa_hang";
+                case "T008": return "sp_thoi_gian_rung_xa_hang";
+                default: return null;
+            }
+        }
+
+        private string GetStageDisplayName(string tagNo)
+        {
+            switch (tagNo)
+            {
+                case "T001": return "Cấp liệu";
+                case "T002": return "Trộn 1";
+                case "T003": return "Xả đáy";
+                case "T004": return "Rung xả đáy";
+                case "T005": return "Hút xả đáy";
+                case "T006": return "Trộn 2";
+                case "T007": return "Xả hàng";
+                case "T008": return "Rung xả hàng";
+                default: return tagNo;
+            }
+        }
+
+        private bool InsertRealtimeStageAlarm(string tagName, double value, double threshold, string message, string tagNo)
+        {
+            try
+            {
+                if (!CreateDatabaseIfNotExists()) return false;
+
+                dataAccess.ConnectionString = GetConnectionStringWithDb();
+
+                string tblName = "realtime_alarms";
+                string batchIdValue = activeBatchId.HasValue ? activeBatchId.Value.ToString() : "NULL";
+                string runIdValue = activeRunId.HasValue ? activeRunId.Value.ToString() : "NULL";
+
+                // Check for duplicate active stage alarm (once per run)
+                if (activeRunId.HasValue)
+                {
+                    string checkDupQuery = string.Format(
+                        "SELECT COUNT(*) FROM `{0}` WHERE `runId` = {1} AND `TagName` = '{2}' AND `Severity` = 'INFO'",
+                        tblName, activeRunId.Value, tagName);
+                    var dupObj = dataAccess.ExecuteScalarQuery(checkDupQuery);
+                    if (dupObj != null && dupObj != DBNull.Value && Convert.ToInt32(dupObj) > 0)
+                    {
+                        System.Diagnostics.Debug.WriteLine(string.Format("[AlarmReportLogger] Stage duration alarm for '{0}' already logged in this run. Skipping duplicate.", tagName));
+                        return true;
+                    }
+                }
+
+                var query = string.Format(
+                    "INSERT INTO `{0}` (`DateTime`, `DeviceName`, `TagName`, `Value`, `Threshold`, `Operator`, `Message`, `QuyTrinh`, `CongDoan`, `batchId`, `runId`, `Severity`, `restore_time`) " +
+                    "VALUES ('{1:yyyy-MM-dd HH:mm:ss}', '{2}', '{3}', {4}, {5}, '>', '{6}', {7}, '{8}', {9}, {10}, 'INFO', '{1:yyyy-MM-dd HH:mm:ss}')",
+                    tblName, DateTime.Now, deviceName, tagName, value, threshold, message, currentQuyTrinh, tagNo, batchIdValue, runIdValue);
+
+                return dataAccess.ExecuteNonQuery(query) >= 0;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(string.Format("[AlarmReportLogger] InsertRealtimeStageAlarm ERROR: {0}", ex.Message));
                 return false;
             }
         }
