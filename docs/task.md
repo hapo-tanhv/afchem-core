@@ -35,5 +35,8 @@
   - [x] Implement duplicate check for `realtime_alarms` in `AlarmReportLogger.cs`
   - [x] Rebuild solution and verify with test script `test_duplicate_check.ps1`
 
-
-
+- [x] Compensating Run - Clone BOM & Priority Scheduling
+  - [x] Implement checks and logic in `AlarmReportLogger.cs` `FailActiveBatch()`
+  - [x] Implement checks and logic in `AlarmLogger.cs` `GetActiveBatchAndRunId()`
+  - [x] Compile and rebuild the solution using MSBuild 2019
+  - [x] Verify functionality via testing

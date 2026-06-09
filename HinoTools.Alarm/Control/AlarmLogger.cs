@@ -219,25 +219,67 @@ namespace HinoTools.Alarm.Control
                         // Create a compensating run for the parent batch
                         try
                         {
-                            string infoQuery = string.Format("SELECT name, total_runs FROM `batches` WHERE `id` = {0}", activeBId);
+                            string infoQuery = string.Format(
+                                "SELECT b.name, b.total_runs, r.run_number FROM `batches` b " +
+                                "JOIN `runs` r ON r.batch_id = b.id " +
+                                "WHERE b.id = {0} AND r.id = {1}", 
+                                activeBId, activeRId);
                             var infoDt = this.dataAccess.ExecuteQuery(infoQuery);
                             if (infoDt != null && infoDt.Rows.Count > 0)
                             {
                                 string batchName = infoDt.Rows[0]["name"].ToString();
                                 int currentTotalRuns = Convert.ToInt32(infoDt.Rows[0]["total_runs"]);
+                                int failedRunNumber = Convert.ToInt32(infoDt.Rows[0]["run_number"]);
 
-                                int newRunNumber = currentTotalRuns + 1;
-                                string newRunName = string.Format("{0}-Me{1:D2}", batchName, newRunNumber);
+                                // Check BOM details existence
+                                string bomCheckQuery = string.Format("SELECT COUNT(*) FROM `run_info` WHERE `run_id` = {0}", activeRId);
+                                var bomCountObj = this.dataAccess.ExecuteScalarQuery(bomCheckQuery);
+                                int bomCount = bomCountObj != null ? Convert.ToInt32(bomCountObj) : 0;
 
-                                // Update total_runs in batches
-                                string updateBatchRunsQuery = string.Format("UPDATE `batches` SET `total_runs` = {0} WHERE `id` = {1}", newRunNumber, activeBId);
-                                this.dataAccess.ExecuteNonQuery(updateBatchRunsQuery);
+                                if (bomCount == 0)
+                                {
+                                    WriteDebugLog(string.Format("[GetActiveBatchAndRunId] Run ID {0} has no BOM details (test run). Skipping compensating run creation.", activeRId));
+                                }
+                                else
+                                {
+                                    // Check retry limit (max 3 retries, meaning total 4 runs with the same run_number)
+                                    string retryCountQuery = string.Format("SELECT COUNT(*) FROM `runs` WHERE `batch_id` = {0} AND `run_number` = {1}", activeBId, failedRunNumber);
+                                    var retryCountObj = this.dataAccess.ExecuteScalarQuery(retryCountQuery);
+                                    int retryCount = retryCountObj != null ? Convert.ToInt32(retryCountObj) : 0;
 
-                                // Insert new compensating run as Pending
-                                string insertCompensatingRunQuery = string.Format(
-                                    "INSERT INTO `runs` (`batch_id`, `run_number`, `name`, `status`, `created_at`) VALUES ({0}, {1}, '{2}', 'Pending', NOW())",
-                                    activeBId, newRunNumber, newRunName);
-                                this.dataAccess.ExecuteNonQuery(insertCompensatingRunQuery);
+                                    if (retryCount >= 4)
+                                    {
+                                        WriteDebugLog(string.Format("[GetActiveBatchAndRunId] Max retries reached (3 retries, total 4 runs) for run_number {0} in Batch ID {1}. Skipping compensating run creation.", failedRunNumber, activeBId));
+                                    }
+                                    else
+                                    {
+                                        int newRunNumberForName = currentTotalRuns + 1;
+                                        string newRunName = string.Format("{0}-Me{1:D2}", batchName, newRunNumberForName);
+
+                                        // Update total_runs in batches
+                                        string updateBatchRunsQuery = string.Format("UPDATE `batches` SET `total_runs` = {0} WHERE `id` = {1}", newRunNumberForName, activeBId);
+                                        this.dataAccess.ExecuteNonQuery(updateBatchRunsQuery);
+
+                                        // Insert new compensating run as Pending (inheriting failed run's run_number for FIFO priority)
+                                        string insertCompensatingRunQuery = string.Format(
+                                            "INSERT INTO `runs` (`batch_id`, `run_number`, `name`, `status`, `created_at`) VALUES ({0}, {1}, '{2}', 'Pending', NOW()); SELECT LAST_INSERT_ID();",
+                                            activeBId, failedRunNumber, newRunName);
+                                        var newRunIdObj = this.dataAccess.ExecuteScalarQuery(insertCompensatingRunQuery);
+                                        if (newRunIdObj != null && newRunIdObj != DBNull.Value)
+                                        {
+                                            int newRunId = Convert.ToInt32(newRunIdObj);
+
+                                            // Clone BOM (run_info) from the failed run to the new compensating run
+                                            string cloneBomQuery = string.Format(
+                                                "INSERT INTO `run_info` (`run_id`, `code`, `material_code`, `quantity`, `value`, `unit`, `batch_no`, `created_at`) " +
+                                                "SELECT {0}, `code`, `material_code`, `quantity`, `value`, `unit`, `batch_no`, NOW() " +
+                                                "FROM `run_info` WHERE `run_id` = {1}",
+                                                newRunId, activeRId);
+                                            this.dataAccess.ExecuteNonQuery(cloneBomQuery);
+                                            WriteDebugLog(string.Format("[GetActiveBatchAndRunId] Created compensating Run '{0}' (ID: {1}, Priority RunNumber: {2}) and cloned BOM from failed Run ID {3}.", newRunName, newRunId, failedRunNumber, activeRId));
+                                        }
+                                    }
+                                }
                             }
                         }
                         catch (Exception ex)
@@ -319,11 +361,9 @@ namespace HinoTools.Alarm.Control
 
                 string fallbackBatchName = $"{deviceName}-{todayStr}-{nextStt:D2}";
                 string insertBatch = $"INSERT INTO `batches` (`name`, `device_name`, `status`, `total_runs`, `start_time`, `created_at`) " +
-                                     $"VALUES ('{fallbackBatchName}', '{deviceName}', 'Active', 1, '{nowStr}', NOW())";
-                this.dataAccess.ExecuteNonQuery(insertBatch);
-
-                string getLastBatchId = "SELECT LAST_INSERT_ID()";
-                var lastBatchIdObj = this.dataAccess.ExecuteScalarQuery(getLastBatchId);
+                                     $"VALUES ('{fallbackBatchName}', '{deviceName}', 'Active', 1, '{nowStr}', NOW()); " +
+                                     $"SELECT LAST_INSERT_ID();";
+                var lastBatchIdObj = this.dataAccess.ExecuteScalarQuery(insertBatch);
                 if (lastBatchIdObj != null && lastBatchIdObj != DBNull.Value)
                 {
                     batchId = Convert.ToInt32(lastBatchIdObj);
@@ -331,11 +371,9 @@ namespace HinoTools.Alarm.Control
 
                 string fallbackRunName = $"{fallbackBatchName}-Me01";
                 string insertRun = $"INSERT INTO `runs` (`batch_id`, `run_number`, `name`, `status`, `start_time`, `created_at`) " +
-                                   $"VALUES ({batchId.Value}, 1, '{fallbackRunName}', 'Active', '{nowStr}', NOW())";
-                this.dataAccess.ExecuteNonQuery(insertRun);
-
-                string getLastRunId = "SELECT LAST_INSERT_ID()";
-                var lastRunIdObj = this.dataAccess.ExecuteScalarQuery(getLastRunId);
+                                   $"VALUES ({batchId.Value}, 1, '{fallbackRunName}', 'Active', '{nowStr}', NOW()); " +
+                                   $"SELECT LAST_INSERT_ID();";
+                var lastRunIdObj = this.dataAccess.ExecuteScalarQuery(insertRun);
                 if (lastRunIdObj != null && lastRunIdObj != DBNull.Value)
                 {
                     runId = Convert.ToInt32(lastRunIdObj);
