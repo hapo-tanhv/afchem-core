@@ -1,0 +1,89 @@
+# Build results
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Aa][Rr][Mm]/
+[Aa][Rr][Ii]64/
+bld/
+[Bb]uild/
+
+# Visual Studio
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.rsuser
+
+# Visual Studio Code
+.vscode/
+
+# User-specific files
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# NuGet
+*.nupkg
+packages/
+!.packages.config
+
+# Packages directory
+packages/*
+
+# ReSharper
+_ReSharper*/
+*.[Rr]e[Ss]harper
+*.DotSettings.User
+
+# Telerik
+Telerik/
+
+# DotNetNuke
+[Dd]NN-[Ll]og[s]/
+
+# VS Cache
+.vs/
+
+# IDE
+.idea/
+*.swp
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Temp files
+*.tmp
+*.temp
+~*
+
+# Database
+*.mdf
+*.ldf
+*.sqlite
+
+# Application files
+appsettings.Development.json
+appsettings.Local.json
+
+# CafeKit / Ecosystem
+specs/_shared/
+plans/
+!plans/templates/
+
+# Temporary scratch scripts
+scratch/

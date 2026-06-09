@@ -93,13 +93,13 @@ namespace WindowsFormsApp1
         "AFChemTX01.NhietDoBonTronDuoi;NhietDoBonTronDuoi"};
             this.alarmReportLogger1.DatabaseName = "scada";
             this.alarmReportLogger1.Driver = this.iDriver1;
-            this.alarmReportLogger1.HttpPort = 5500;
             this.alarmReportLogger1.Password = "101101";
             this.alarmReportLogger1.PollingInterval = 30000;
             this.alarmReportLogger1.ServerName = "localhost";
+            this.alarmReportLogger1.StopTimeout = 7200;
             this.alarmReportLogger1.TableName = "alarmreport";
             this.alarmReportLogger1.UserID = "root";
-            this.alarmReportLogger1.WebhookPort = 5600;
+            this.alarmReportLogger1.WebhookPort = 5605;
             this.alarmReportLogger1.WebhookToken = "wh_tok_2f8d9b1e4c7a6e5b3d2c1f0a9e8d7c6b";
             // 
             // realtimeThresholdLogger1

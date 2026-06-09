@@ -162,12 +162,12 @@ namespace HinoTools.Data.Log
         public int PollingInterval { get; set; } = 30000;
 
         [Category("Hino Settings")]
-        [Description("HTTP Server API Port (default: 5500).")]
+        [Description("HTTP Server API Port (Disabled, was default 5500).")]
         public int HttpPort { get; set; } = 5500;
 
         [Category("Hino Settings")]
-        [Description("Webhook HTTP Server API Port (default: 5600).")]
-        public int WebhookPort { get; set; } = 5600;
+        [Description("Webhook HTTP Server API Port (default: 5605).")]
+        public int WebhookPort { get; set; } = 5605;
 
         [Category("Hino Settings")]
         [Description("Webhook Secret Security Token.")]
@@ -240,16 +240,8 @@ namespace HinoTools.Data.Log
             AddBatchIdColumnIfNeeded(TableName);
             AddRunIdColumnIfNeeded(TableName);
 
-            // Start HTTP API Server
-            try
-            {
-                httpServer = new HinoTools.Data.Http.BatchesHttpServer(GetConnectionStringWithDb(), HttpPort);
-                httpServer.Start();
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] HTTP Server start FAILED: {ex.Message}");
-            }
+            // HTTP API Server (Disabled/Cleared)
+            System.Diagnostics.Debug.WriteLine("[AlarmReportLogger] HTTP Server (port 5500) is disabled.");
 
             // Start Webhook HTTP Server
             try
