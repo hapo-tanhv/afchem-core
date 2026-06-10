@@ -1,3 +1,4 @@
+using ATSCADA;
 using HinoTools.Alarm.Database;
 using HinoTools.Alarm.Model;
 using System;
@@ -343,6 +344,13 @@ namespace HinoTools.Alarm.Control
                 }
 
                 // 4. Fallback: Auto-generate a fallback/emergency batch and run
+                double stopValue = GetStopTagValue(deviceName);
+                if (stopValue == 1)
+                {
+                    WriteDebugLog(string.Format("[GetActiveBatchAndRunId] No active/pending run found in DB, and machine is stopped (Stop = 1). Skipping emergency batch/run creation."));
+                    return;
+                }
+
                 string todayStr = DateTime.Now.ToString("yyyyMMdd");
                 int nextStt = 1;
 
@@ -384,6 +392,41 @@ namespace HinoTools.Alarm.Control
             catch (Exception ex)
             {
                 WriteDebugLog(string.Format("[GetActiveBatchAndRunId] EXCEPTION: {0}{1}{2}", ex.Message, Environment.NewLine, ex.StackTrace));
+            }
+        }
+
+        private double GetStopTagValue(string deviceName)
+        {
+            try
+            {
+                if (this.alarmHub?.Driver == null)
+                {
+                    WriteDebugLog("[GetStopTagValue] alarmHub or Driver is null. Default to 1 (Stopped).");
+                    return 1;
+                }
+
+                string stopTagName = $"AFChem{deviceName}.Stop";
+                var tag = this.alarmHub.Driver.GetTagByName(stopTagName);
+                if (tag == null)
+                {
+                    WriteDebugLog(string.Format("[GetStopTagValue] Tag '{0}' not found. Default to 1 (Stopped).", stopTagName));
+                    return 1;
+                }
+
+                if (tag.Value == null)
+                {
+                    WriteDebugLog(string.Format("[GetStopTagValue] Tag '{0}' value is null. Default to 1 (Stopped).", stopTagName));
+                    return 1;
+                }
+
+                double.TryParse(tag.Value, out double val);
+                WriteDebugLog(string.Format("[GetStopTagValue] Tag '{0}' value is {1}", stopTagName, val));
+                return val;
+            }
+            catch (Exception ex)
+            {
+                WriteDebugLog(string.Format("[GetStopTagValue] Exception: {0}", ex.Message));
+                return 1;
             }
         }
 
