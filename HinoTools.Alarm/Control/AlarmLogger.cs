@@ -1,4 +1,5 @@
 using ATSCADA;
+using ATSCADA.ToolExtensions.ExtensionMethods;
 using HinoTools.Alarm.Database;
 using HinoTools.Alarm.Model;
 using System;
