@@ -334,7 +334,7 @@ namespace HinoTools.Data.Http
                     }
 
                     // Start background task to create runs and import BOM
-                    _ = Task.Run(() => ProcessWebhookAsync(logId, batchId, batchName, totalRuns, paramsDict));
+                    _ = Task.Run(() => ProcessWebhookAsync(logId, batchId, batchName, totalRuns, deviceName, paramsDict));
 
                     // Synchronously return success response with batch name
                     string successJson = $"{{\n  \"success\": true,\n  \"message\": \"Batch created successfully\",\n  \"batch_name\": \"{batchName}\"\n}}";
@@ -428,14 +428,37 @@ namespace HinoTools.Data.Http
             }
         }
 
-        private void ProcessWebhookAsync(int logId, int batchId, string batchName, int totalRuns, System.Collections.Generic.Dictionary<string, string> paramsDict)
+        private void ProcessWebhookAsync(int logId, int batchId, string batchName, int totalRuns, string deviceName, System.Collections.Generic.Dictionary<string, string> paramsDict)
         {
             try
             {
                 var serializer = new System.Web.Script.Serialization.JavaScriptSerializer();
 
+                int maxOrder = 0;
+                // Query max execution_order for this device
+                lock (dbLock)
+                {
+                    using (var conn = new MySqlConnection(connectionString))
+                    {
+                        conn.Open();
+                        string selectMaxOrderQuery = "SELECT IFNULL(MAX(r.execution_order), 0) FROM `runs` r " +
+                                                     "JOIN `batches` b ON r.batch_id = b.id " +
+                                                     "WHERE b.device_name = @device_name";
+                        using (var cmdMax = new MySqlCommand(selectMaxOrderQuery, conn))
+                        {
+                            cmdMax.Parameters.AddWithValue("@device_name", deviceName);
+                            var maxObj = cmdMax.ExecuteScalar();
+                            if (maxObj != null && maxObj != DBNull.Value)
+                            {
+                                maxOrder = Convert.ToInt32(maxObj);
+                            }
+                        }
+                    }
+                }
+
                 for (int r = 1; r <= totalRuns; r++)
                 {
+                    int currentExecutionOrder = maxOrder + r;
                     string runName = $"{batchName}-Me{r:D2}";
                     int runId = 0;
 
@@ -447,13 +470,14 @@ namespace HinoTools.Data.Http
                             conn.Open();
                             EnsureWebhookTableExists(conn);
 
-                            string insertRunQuery = "INSERT INTO `runs` (`batch_id`, `run_number`, `name`, `status`, `created_at`) " +
-                                                    "VALUES (@batch_id, @run_number, @name, 'Pending', NOW())";
+                            string insertRunQuery = "INSERT INTO `runs` (`batch_id`, `run_number`, `name`, `status`, `execution_order`, `created_at`) " +
+                                                    "VALUES (@batch_id, @run_number, @name, 'Pending', @execution_order, NOW())";
                             using (var cmd = new MySqlCommand(insertRunQuery, conn))
                             {
                                 cmd.Parameters.AddWithValue("@batch_id", batchId);
                                 cmd.Parameters.AddWithValue("@run_number", r);
                                 cmd.Parameters.AddWithValue("@name", runName);
+                                cmd.Parameters.AddWithValue("@execution_order", currentExecutionOrder);
                                 cmd.ExecuteNonQuery();
                                 runId = (int)cmd.LastInsertedId;
                             }

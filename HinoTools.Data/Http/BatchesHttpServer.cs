@@ -251,6 +251,21 @@ namespace HinoTools.Data.Http
                                 }
                             }
 
+                            // Query max execution_order for this device
+                            int maxOrder = 0;
+                            string selectMaxOrderQuery = "SELECT IFNULL(MAX(r.execution_order), 0) FROM `runs` r " +
+                                                         "JOIN `batches` b ON r.batch_id = b.id " +
+                                                         "WHERE b.device_name = @device_name";
+                            using (var cmdMax = new MySqlCommand(selectMaxOrderQuery, conn))
+                            {
+                                cmdMax.Parameters.AddWithValue("@device_name", deviceName);
+                                var maxObj = cmdMax.ExecuteScalar();
+                                if (maxObj != null && maxObj != DBNull.Value)
+                                {
+                                    maxOrder = Convert.ToInt32(maxObj);
+                                }
+                            }
+
                             // 2. Insert quantity number of batches sequentially
                             for (int i = 0; i < quantity; i++)
                             {
@@ -271,14 +286,16 @@ namespace HinoTools.Data.Http
                                     var createdRuns = new System.Collections.Generic.List<string>();
                                     for (int r = 1; r <= runsCount; r++)
                                     {
+                                        int currentExecutionOrder = maxOrder + r;
                                         string runName = $"{batchName}-Me{r:D2}";
-                                        string insertRunQuery = "INSERT INTO `runs` (`batch_id`, `run_number`, `name`, `status`, `created_at`) " +
-                                                                "VALUES (@batch_id, @run_number, @name, 'Pending', NOW())";
+                                        string insertRunQuery = "INSERT INTO `runs` (`batch_id`, `run_number`, `name`, `status`, `execution_order`, `created_at`) " +
+                                                                "VALUES (@batch_id, @run_number, @name, 'Pending', @execution_order, NOW())";
                                         using (var runCmd = new MySqlCommand(insertRunQuery, conn))
                                         {
                                             runCmd.Parameters.AddWithValue("@batch_id", insertedId);
                                             runCmd.Parameters.AddWithValue("@run_number", r);
                                             runCmd.Parameters.AddWithValue("@name", runName);
+                                            runCmd.Parameters.AddWithValue("@execution_order", currentExecutionOrder);
                                             runCmd.ExecuteNonQuery();
                                             int runInsertedId = (int)runCmd.LastInsertedId;
 
@@ -286,11 +303,14 @@ namespace HinoTools.Data.Http
                                                              $"        \"id\": {runInsertedId},\n" +
                                                              $"        \"run_number\": {r},\n" +
                                                              $"        \"name\": \"{runName}\",\n" +
-                                                             $"        \"status\": \"Pending\"\n" +
+                                                             $"        \"status\": \"Pending\",\n" +
+                                                             $"        \"execution_order\": {currentExecutionOrder}\n" +
                                                              $"      }}";
                                             createdRuns.Add(runJson);
                                         }
                                     }
+
+                                    maxOrder += runsCount;
 
                                     string runsArrayJson = string.Join(",\n", createdRuns);
                                     string itemJson = $"{{\n" +
@@ -402,7 +422,7 @@ namespace HinoTools.Data.Http
                             conn.Open();
                             EnsureBatchesTableExists(conn);
 
-                            string selectQuery = "SELECT `id`, `batch_id`, `run_number`, `name`, `status`, `start_time`, `end_time`, `created_at` FROM `runs` WHERE `batch_id` = @batch_id ORDER BY `run_number` ASC";
+                            string selectQuery = "SELECT `id`, `batch_id`, `run_number`, `name`, `status`, `execution_order`, `start_time`, `end_time`, `created_at` FROM `runs` WHERE `batch_id` = @batch_id ORDER BY `run_number` ASC";
                             using (var cmd = new MySqlCommand(selectQuery, conn))
                             {
                                 cmd.Parameters.AddWithValue("@batch_id", batchId);
@@ -415,9 +435,10 @@ namespace HinoTools.Data.Http
                                         int runNum = reader.GetInt32(2);
                                         string name = reader.GetString(3);
                                         string status = reader.GetString(4);
-                                        string startTime = reader.IsDBNull(5) ? "null" : $"\"{reader.GetDateTime(5):yyyy-MM-dd HH:mm:ss}\"";
-                                        string endTime = reader.IsDBNull(6) ? "null" : $"\"{reader.GetDateTime(6):yyyy-MM-dd HH:mm:ss}\"";
-                                        string createdAt = reader.GetDateTime(7).ToString("yyyy-MM-dd HH:mm:ss");
+                                        int execOrder = reader.GetInt32(5);
+                                        string startTime = reader.IsDBNull(6) ? "null" : $"\"{reader.GetDateTime(6):yyyy-MM-dd HH:mm:ss}\"";
+                                        string endTime = reader.IsDBNull(7) ? "null" : $"\"{reader.GetDateTime(7):yyyy-MM-dd HH:mm:ss}\"";
+                                        string createdAt = reader.GetDateTime(8).ToString("yyyy-MM-dd HH:mm:ss");
 
                                         string item = $"{{\n" +
                                                       $"      \"id\": {id},\n" +
@@ -425,6 +446,7 @@ namespace HinoTools.Data.Http
                                                       $"      \"run_number\": {runNum},\n" +
                                                       $"      \"name\": \"{name}\",\n" +
                                                       $"      \"status\": \"{status}\",\n" +
+                                                      $"      \"execution_order\": {execOrder},\n" +
                                                       $"      \"start_time\": {startTime},\n" +
                                                       $"      \"end_time\": {endTime},\n" +
                                                       $"      \"created_at\": \"{createdAt}\"\n" +
@@ -525,6 +547,7 @@ namespace HinoTools.Data.Http
                                         "  `run_number` INT NOT NULL," +
                                         "  `name` VARCHAR(150) NOT NULL UNIQUE," +
                                         "  `status` VARCHAR(50) NOT NULL DEFAULT 'Pending'," +
+                                        "  `execution_order` INT NOT NULL DEFAULT 0," +
                                         "  `start_time` DATETIME NULL," +
                                         "  `end_time` DATETIME NULL," +
                                         "  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP," +
@@ -535,6 +558,37 @@ namespace HinoTools.Data.Http
             using (var cmd = new MySqlCommand(createRunsTableSql, conn))
             {
                 cmd.ExecuteNonQuery();
+            }
+
+            // Check and add execution_order column to runs table if it doesn't exist
+            try
+            {
+                string checkColQuery = "SHOW COLUMNS FROM `runs` LIKE 'execution_order'";
+                using (var cmd = new MySqlCommand(checkColQuery, conn))
+                {
+                    var result = cmd.ExecuteScalar();
+                    if (result == null || result == DBNull.Value)
+                    {
+                        string alterQuery = "ALTER TABLE `runs` ADD COLUMN `execution_order` INT NOT NULL DEFAULT 0 AFTER `status`";
+                        using (var alterCmd = new MySqlCommand(alterQuery, conn))
+                        {
+                            alterCmd.ExecuteNonQuery();
+                        }
+                        System.Diagnostics.Debug.WriteLine("[Migration] Added column execution_order to runs table successfully.");
+
+                        // One-time backfill migration for historical runs
+                        string backfillSql = "UPDATE `runs` SET `execution_order` = `id` WHERE `execution_order` = 0";
+                        using (var backfillCmd = new MySqlCommand(backfillSql, conn))
+                        {
+                            int backfillRows = backfillCmd.ExecuteNonQuery();
+                            System.Diagnostics.Debug.WriteLine($"[Migration] Backfilled {backfillRows} historical runs with execution_order.");
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[Migration] ERROR adding execution_order column to runs: {ex.Message}");
             }
 
             // Task 1.4: Historical data migration (One-time check and execution)

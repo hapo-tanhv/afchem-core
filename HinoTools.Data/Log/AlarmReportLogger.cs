@@ -846,7 +846,7 @@ namespace HinoTools.Data.Log
                 try
                 {
                     string infoQuery = string.Format(
-                        "SELECT b.name, b.total_runs, r.run_number FROM `batches` b " +
+                        "SELECT b.name, b.total_runs, r.run_number, r.execution_order FROM `batches` b " +
                         "JOIN `runs` r ON r.batch_id = b.id " +
                         "WHERE b.id = {0} AND r.id = {1}", 
                         activeBatchId.Value, activeRunId.Value);
@@ -856,6 +856,7 @@ namespace HinoTools.Data.Log
                         string batchName = infoDt.Rows[0]["name"].ToString();
                         int currentTotalRuns = Convert.ToInt32(infoDt.Rows[0]["total_runs"]);
                         int failedRunNumber = Convert.ToInt32(infoDt.Rows[0]["run_number"]);
+                        int failedRunExecutionOrder = Convert.ToInt32(infoDt.Rows[0]["execution_order"]);
 
                         // Check BOM details existence
                         string bomCheckQuery = string.Format("SELECT COUNT(*) FROM `run_info` WHERE `run_id` = {0}", activeRunId.Value);
@@ -886,10 +887,10 @@ namespace HinoTools.Data.Log
                                 string updateBatchRunsQuery = string.Format("UPDATE `batches` SET `total_runs` = {0} WHERE `id` = {1}", newRunNumberForName, activeBatchId.Value);
                                 dataAccess.ExecuteNonQuery(updateBatchRunsQuery);
 
-                                // Insert new compensating run as Pending (inheriting failed run's run_number for FIFO priority)
+                                // Insert new compensating run as Pending (inheriting failed run's run_number and execution_order for priority)
                                 string insertCompensatingRunQuery = string.Format(
-                                    "INSERT INTO `runs` (`batch_id`, `run_number`, `name`, `status`, `created_at`) VALUES ({0}, {1}, '{2}', 'Pending', NOW()); SELECT LAST_INSERT_ID();",
-                                    activeBatchId.Value, failedRunNumber, newRunName);
+                                    "INSERT INTO `runs` (`batch_id`, `run_number`, `name`, `status`, `execution_order`, `created_at`) VALUES ({0}, {1}, '{2}', 'Pending', {3}, NOW()); SELECT LAST_INSERT_ID();",
+                                    activeBatchId.Value, failedRunNumber, newRunName, failedRunExecutionOrder);
                                 var newRunIdObj = dataAccess.ExecuteScalarQuery(insertCompensatingRunQuery);
                                 if (newRunIdObj != null && newRunIdObj != DBNull.Value)
                                 {
@@ -1090,6 +1091,7 @@ namespace HinoTools.Data.Log
                                             "  `run_number` INT NOT NULL," +
                                             "  `name` VARCHAR(150) NOT NULL UNIQUE," +
                                             "  `status` VARCHAR(50) NOT NULL DEFAULT 'Pending'," +
+                                            "  `execution_order` INT NOT NULL DEFAULT 0," +
                                             "  `start_time` DATETIME NULL," +
                                             "  `end_time` DATETIME NULL," +
                                             "  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP," +
@@ -1137,6 +1139,28 @@ namespace HinoTools.Data.Log
                     }
                 }
 
+                // Check and add execution_order column to runs table if it doesn't exist
+                try
+                {
+                    string checkColSql = "SHOW COLUMNS FROM `runs` LIKE 'execution_order'";
+                    var colResult = dataAccess.ExecuteScalarQuery(checkColSql);
+                    if (colResult == null || colResult == DBNull.Value)
+                    {
+                        string alterSql = "ALTER TABLE `runs` ADD COLUMN `execution_order` INT NOT NULL DEFAULT 0 AFTER `status`";
+                        dataAccess.ExecuteNonQuery(alterSql);
+                        System.Diagnostics.Debug.WriteLine("[Migration] Added column execution_order to runs table successfully.");
+
+                        // Task 1.2: One-time backfill migration for historical runs
+                        string backfillSql = "UPDATE `runs` SET `execution_order` = `id` WHERE `execution_order` = 0";
+                        int backfillRows = dataAccess.ExecuteNonQuery(backfillSql);
+                        System.Diagnostics.Debug.WriteLine($"[Migration] Backfilled {backfillRows} historical runs with execution_order.");
+                    }
+                }
+                catch (Exception colEx)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[Migration] ERROR adding column execution_order to runs: {colEx.Message}");
+                }
+
                 // Task 1.4: Historical data migration (One-time check and execution)
                 string migrateRunsSql = "INSERT INTO `runs` (`batch_id`, `run_number`, `name`, `status`, `start_time`, `end_time`, `created_at`) " +
                                         "SELECT b.id, 1, CONCAT(b.name, '-Me01'), b.status, b.start_time, b.end_time, b.created_at " +
@@ -1174,11 +1198,11 @@ namespace HinoTools.Data.Log
                     return;
                 }
                 
-                // 1. Find the oldest 'Pending' run for this device (FIFO)
+                // 1. Find the oldest 'Pending' run for this device based on execution_order
                 string findQuery = "SELECT r.id, r.batch_id, b.name as batch_name, b.status as batch_status FROM `runs` r " +
                                    "JOIN `batches` b ON r.batch_id = b.id " +
                                    $"WHERE b.device_name = '{deviceName}' AND r.status = 'Pending' " +
-                                   "ORDER BY b.id ASC, r.run_number ASC LIMIT 1";
+                                   "ORDER BY r.execution_order ASC, r.id ASC LIMIT 1";
                 
                 var dt = dataAccess.ExecuteQuery(findQuery);
                 if (dt != null && dt.Rows.Count > 0)
@@ -1206,7 +1230,7 @@ namespace HinoTools.Data.Log
                     
                     activeRunId = runId;
                     activeBatchId = batchId;
-                    System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] FIFO linked Run ID: {runId} in Batch ID: {batchId} as Active.");
+                    System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] Priority linked Run ID: {runId} in Batch ID: {batchId} as Active.");
                 }
                 else
                 {
@@ -1216,8 +1240,8 @@ namespace HinoTools.Data.Log
                     
                     // Find the last batch created today for this device
                     string selectLastQuery = $"SELECT `name` FROM `batches` " +
-                                            $"WHERE `device_name` = '{deviceName}' AND DATE(`created_at`) = CURDATE() " +
-                                            $"ORDER BY `id` DESC LIMIT 1";
+                                             $"WHERE `device_name` = '{deviceName}' AND DATE(`created_at`) = CURDATE() " +
+                                             $"ORDER BY `id` DESC LIMIT 1";
                     var lastObj = dataAccess.ExecuteScalarQuery(selectLastQuery);
                     if (lastObj != null && lastObj != DBNull.Value)
                     {
@@ -1240,10 +1264,10 @@ namespace HinoTools.Data.Log
                         activeBatchId = Convert.ToInt32(lastBatchIdObj);
                     }
 
-                    // Insert corresponding Run and mark as Active immediately, then get its ID in the same query
+                    // Insert corresponding Run and mark as Active immediately (execution_order = 0), then get its ID in the same query
                     string fallbackRunName = $"{fallbackBatchName}-Me01";
-                    string insertRunQuery = $"INSERT INTO `runs` (`batch_id`, `run_number`, `name`, `status`, `start_time`, `created_at`) " +
-                                            $"VALUES ({activeBatchId.Value}, 1, '{fallbackRunName}', 'Active', '{DateTime.Now:yyyy-MM-dd HH:mm:ss}', NOW()); " +
+                    string insertRunQuery = $"INSERT INTO `runs` (`batch_id`, `run_number`, `name`, `status`, `execution_order`, `start_time`, `created_at`) " +
+                                            $"VALUES ({activeBatchId.Value}, 1, '{fallbackRunName}', 'Active', 0, '{DateTime.Now:yyyy-MM-dd HH:mm:ss}', NOW()); " +
                                             $"SELECT LAST_INSERT_ID();";
                     var lastRunIdObj = dataAccess.ExecuteScalarQuery(insertRunQuery);
                     if (lastRunIdObj != null && lastRunIdObj != DBNull.Value)
