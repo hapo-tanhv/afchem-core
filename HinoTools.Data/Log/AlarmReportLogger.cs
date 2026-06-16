@@ -329,7 +329,6 @@ namespace HinoTools.Data.Log
                             activeBatchId = dbBatchId;
                             currentCongDoan = 1;
                             ResetFlags();
-                            hasThoiGianCapLieuStarted = true;
                             lastAlarmReportTime = DateTime.MinValue; // Trigger instant logging for the new run
                         }
                     }
