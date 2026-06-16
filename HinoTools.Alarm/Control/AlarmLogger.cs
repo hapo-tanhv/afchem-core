@@ -335,6 +335,13 @@ namespace HinoTools.Alarm.Control
                 }
 
                 // 3. Fallback: Find the oldest 'Pending' run sorted by execution_order
+                double stopValueForPending = GetStopTagValue(deviceName);
+                if (stopValueForPending == 1)
+                {
+                    WriteDebugLog(string.Format("[GetActiveBatchAndRunId] Machine is stopped (Stop = 1). Skipping activation of pending run."));
+                    return;
+                }
+
                 string fallbackQuery = "SELECT r.id, r.batch_id, b.status as batch_status FROM `runs` r " +
                                        "JOIN `batches` b ON r.batch_id = b.id " +
                                        $"WHERE b.device_name = '{deviceName}' AND r.status = 'Pending' " +

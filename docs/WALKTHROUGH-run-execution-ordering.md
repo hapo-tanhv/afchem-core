@@ -71,6 +71,10 @@ Tất cả các ca kiểm thử tích hợp đều vượt qua 100% thành công
   - Do đó, `AlarmLogger` sẽ trực tiếp tái sử dụng (`re-use`) mẻ này mà không đánh dấu nó thành `Error` hay tạo mẻ bù.
   - Đồng bộ hóa logic tìm kiếm mẻ `Pending` tiếp theo và tạo mẻ emergency trong `AlarmLogger.cs` để sử dụng và kế thừa trường `execution_order` thống nhất với core logic.
   - Kịch bản kiểm thử độc lập đã được bổ sung tại [test_split_brain_issue.ps1](file:///c:/Users/tanhv/Project/HinoTools.Alarm_27092023_Test/HinoTools.Alarm_27092023_Test/scratch/test_split_brain_issue.ps1) để xác minh và vượt qua hoàn toàn 100% (mẻ 2 được giữ nguyên trạng thái `Active`, không bị lỗi hóa, và không bị tạo mẻ 3 thừa).
+- **Bổ sung cơ chế bảo vệ mẻ Pending khi máy đang dừng (STOP = 1):**
+  - **Vấn đề:** Khi máy đang ở trạng thái dừng (`STOP = 1` và `thoiGianCapLieu = 0`), nếu có bất kỳ lỗi hoặc cảnh báo ngẫu nhiên nào phát sinh (như nút dừng khẩn cấp E-Stop được nhấn), `AlarmLogger` cố gắng ghi nhận cảnh báo đó và tìm mẻ liên kết. Vì không thấy mẻ `Active` nào, nó sẽ tự động tìm mẻ `Pending` có thứ tự ưu tiên cao nhất tiếp theo và kích hoạt (`UPDATE status = 'Active'`) nó lên DB mặc dù mẻ đó chưa hề chạy.
+  - **Giải pháp:** Cập nhật phương thức `GetActiveBatchAndRunId()` trong [AlarmLogger.cs](file:///c:/Users/tanhv/Project/HinoTools.Alarm_27092023_Test/HinoTools.Alarm_27092023_Test/HinoTools.Alarm/Control/AlarmLogger.cs). Khi phát hiện tag `STOP = 1`, hệ thống sẽ chặn không cho phép tự động kích hoạt bất kỳ mẻ `Pending` nào. Cảnh báo lúc này sẽ được ghi nhận độc lập dưới dạng cảnh báo hệ thống (không liên kết mẻ), giữ nguyên mẻ `Pending` ở trạng thái chờ cho đến khi máy thực sự chạy lại.
+
 
 ---
 
