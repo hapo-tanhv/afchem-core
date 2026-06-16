@@ -71,3 +71,29 @@ Tất cả các ca kiểm thử tích hợp đều vượt qua 100% thành công
   - Do đó, `AlarmLogger` sẽ trực tiếp tái sử dụng (`re-use`) mẻ này mà không đánh dấu nó thành `Error` hay tạo mẻ bù.
   - Đồng bộ hóa logic tìm kiếm mẻ `Pending` tiếp theo và tạo mẻ emergency trong `AlarmLogger.cs` để sử dụng và kế thừa trường `execution_order` thống nhất với core logic.
   - Kịch bản kiểm thử độc lập đã được bổ sung tại [test_split_brain_issue.ps1](file:///c:/Users/tanhv/Project/HinoTools.Alarm_27092023_Test/HinoTools.Alarm_27092023_Test/scratch/test_split_brain_issue.ps1) để xác minh và vượt qua hoàn toàn 100% (mẻ 2 được giữ nguyên trạng thái `Active`, không bị lỗi hóa, và không bị tạo mẻ 3 thừa).
+
+---
+
+## 4. Công cụ Khôi phục Dữ liệu từ Webhook Log (Data Recovery Tool)
+
+Chúng tôi đã thiết kế và triển khai script PowerShell [recreate_from_webhook_log.ps1](file:///c:/Users/tanhv/Project/HinoTools.Alarm_27092023_Test/HinoTools.Alarm_27092023_Test/scratch/recreate_from_webhook_log.ps1) giúp tái thiết lập lại toàn bộ dữ liệu bảng `batches`, `runs`, và `run_info` từ dữ liệu lịch sử thô có sẵn trong bảng `webhook_logs`.
+
+### 4.1 Cơ chế và tính năng nâng cấp:
+1. **Dọn dẹp và Tái thiết lập (`-Reset`):**
+   - Hỗ trợ tham số `[switch]$Reset`. Khi chạy với `-Reset`, script sẽ tạm thời vô hiệu hóa kiểm tra khóa ngoại (`FOREIGN_KEY_CHECKS = 0`), dọn sạch (`TRUNCATE`) 3 bảng mục tiêu (`run_info`, `runs`, `batches`), sau đó bật lại kiểm tra khóa ngoại.
+2. **Xử lý tuần tự và Lọc bản ghi:**
+   - Script chỉ truy vấn các bản ghi `webhook_logs` có trạng thái `'Completed'` (hoặc ID log cụ thể nếu truyền tham số `$LogId`) để đảm bảo chỉ những mẻ từng chạy thành công mới được dựng lại. Các log này được xử lý tuần tự theo thời gian tăng dần (`id ASC`).
+3. **Quản lý Số Thứ Tự (STT) và Execution Order Trong Bộ Nhớ:**
+   - Để tránh các mẻ bị trùng lặp số thứ tự hoặc nhảy số sai lệch khi truy vấn DB liên tiếp trên môi trường trống vừa reset, script duy trì cấu trúc theo dõi trong bộ nhớ:
+     - `$batchSequenceTracker`: Đếm và gán STT (ví dụ `-01`, `-02`) tăng dần từ `01` cho mỗi thiết bị trong mỗi ngày.
+     - `$executionOrderTracker`: Lưu trữ và kế thừa liên tục giá trị `execution_order` tăng dần cho các mẻ con thuộc từng thiết bị.
+4. **Trích xuất BOM tự động:**
+   - Tự động giải mã Base64 dữ liệu BOM của từng mẻ con (`custom_thong_tin_bom_san_xuat_a`, `_b`, ...) và nạp đầy đủ thông tin nguyên vật liệu vào bảng `run_info`.
+
+### 4.2 Kết quả Kiểm thử Xác minh:
+- Đã chạy thử nghiệm thực tế trên cơ sở dữ liệu local với tham số `-Reset`.
+- Script đã dọn sạch các bảng thành công, tìm thấy các webhook log có trạng thái `'Completed'`, và tái tạo lại chính xác:
+  - Mẻ 1: `TX01-20260616-01` với 2 mẻ con có `execution_order` là `1` và `2`.
+  - Mẻ 2: `TX01-20260616-02` với 2 mẻ con có `execution_order` là `3` và `4`.
+  - Nạp đầy đủ thông tin BOM vào `run_info` thành công.
+
