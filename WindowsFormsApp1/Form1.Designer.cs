@@ -93,6 +93,7 @@ namespace WindowsFormsApp1
         "AFChemTX01.NhietDoBonTronDuoi;NhietDoBonTronDuoi"};
             this.alarmReportLogger1.DatabaseName = "scada";
             this.alarmReportLogger1.Driver = this.iDriver1;
+            this.alarmReportLogger1.HttpPort = 5500;
             this.alarmReportLogger1.Password = "101101";
             this.alarmReportLogger1.PollingInterval = 30000;
             this.alarmReportLogger1.ServerName = "localhost";
@@ -108,7 +109,7 @@ namespace WindowsFormsApp1
             this.realtimeThresholdLogger1.Collection = new string[] {
         "AFChemTX01.NhietDoMoiTruong;NhietDoMoiTruong;45;>;WARNING;Nhiệt độ môi trường vượ" +
             "t ngưỡng cảnh báo",
-        "AFChemTX01.ApSuat;ApSuat;10;>;ALARM;Áp suất hệ thống vượt ngưỡng nguy hiểm",
+        "AFChemTX01.ApSuat;ApSuat;60;>;ALARM;Áp suất hệ thống vượt ngưỡng nguy hiểm",
         "AFChemTX01.NhietDoBonTronGiua;NhietDoBonTronGiua;40;>;WARNING;Nhiệt độ bồn trộn g" +
             "iữa vượt ngưỡng cảnh báo",
         "AFChemTX01.DoAmMoiTruong;DoAmMoiTruong;60;>;WARNING;Độ ẩm môi trường vượt ngưỡng " +
