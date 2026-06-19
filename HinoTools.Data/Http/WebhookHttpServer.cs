@@ -281,29 +281,73 @@ namespace HinoTools.Data.Http
                                 conn.Open();
                                 EnsureWebhookTableExists(conn);
 
-                                // Find next STT sequence for this device and production date
+                                // Find next STT sequence for this device and production date (for fallback)
                                 int nextStt = 1;
                                 string namePattern = $"{deviceName}-{prodDate:yyyyMMdd}-%";
                                 string selectSttQuery = "SELECT `name` FROM `batches` " +
-                                                         "WHERE `name` LIKE @name_pattern " +
-                                                         "ORDER BY `id` DESC LIMIT 1";
+                                                         "WHERE `name` LIKE @name_pattern";
                                 using (var cmd = new MySqlCommand(selectSttQuery, conn))
                                 {
                                     cmd.Parameters.AddWithValue("@name_pattern", namePattern);
-                                    var obj = cmd.ExecuteScalar();
-                                    if (obj != null && obj != DBNull.Value)
+                                    using (var reader = cmd.ExecuteReader())
                                     {
-                                        string lastBatchName = obj.ToString();
-                                        var parts = lastBatchName.Split('-');
-                                        if (parts.Length >= 3 && int.TryParse(parts[parts.Length - 1], out int lastStt))
+                                        while (reader.Read())
                                         {
-                                            nextStt = lastStt + 1;
+                                            string name = reader.GetString(0);
+                                            var parts = name.Split('-');
+                                            if (parts.Length >= 3 && int.TryParse(parts[parts.Length - 1], out int stt))
+                                            {
+                                                if (stt >= nextStt)
+                                                {
+                                                    nextStt = stt + 1;
+                                                }
+                                            }
                                         }
                                     }
                                 }
 
                                 string dateStr = prodDate.ToString("yyyyMMdd");
-                                batchName = $"{deviceName}-{dateStr}-{nextStt:D2}";
+                                if (string.IsNullOrEmpty(productCode))
+                                {
+                                    batchName = $"{deviceName}-{dateStr}-{nextStt:D2}";
+                                }
+                                else
+                                {
+                                    string baseBatchName = $"{deviceName}-{dateStr}-{productCode}";
+                                    batchName = baseBatchName;
+
+                                    // Check if baseBatchName already exists to handle duplicates
+                                    bool exists = false;
+                                    using (var cmdCheck = new MySqlCommand("SELECT COUNT(*) FROM `batches` WHERE `name` = @name", conn))
+                                    {
+                                        cmdCheck.Parameters.AddWithValue("@name", baseBatchName);
+                                        exists = Convert.ToInt32(cmdCheck.ExecuteScalar()) > 0;
+                                    }
+
+                                    if (exists)
+                                    {
+                                        int nextSuffix = 2;
+                                        string pattern = $"{baseBatchName}-%";
+                                        using (var cmdStt = new MySqlCommand("SELECT `name` FROM `batches` WHERE `name` LIKE @pattern ORDER BY `id` DESC LIMIT 1", conn))
+                                        {
+                                            cmdStt.Parameters.AddWithValue("@pattern", pattern);
+                                            var obj = cmdStt.ExecuteScalar();
+                                            if (obj != null && obj != DBNull.Value)
+                                            {
+                                                string lastConflictedName = obj.ToString();
+                                                if (lastConflictedName.Length > baseBatchName.Length + 1)
+                                                {
+                                                    string suffixStr = lastConflictedName.Substring(baseBatchName.Length + 1);
+                                                    if (int.TryParse(suffixStr, out int lastStt))
+                                                    {
+                                                        nextSuffix = lastStt + 1;
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        batchName = $"{baseBatchName}-{nextSuffix:D2}";
+                                    }
+                                }
 
                                 // Insert the batch
                                 string insertBatchQuery = "INSERT INTO `batches` (`name`, `device_name`, `date`, `product_name`, `product_code`, `manufacturer`, `target_weight`, `formula`, `status`, `total_runs`, `created_at`) " +

@@ -109,7 +109,7 @@ namespace WindowsFormsApp1
             this.realtimeThresholdLogger1.Collection = new string[] {
         "AFChemTX01.NhietDoMoiTruong;NhietDoMoiTruong;45;>;WARNING;Nhiệt độ môi trường vượ" +
             "t ngưỡng cảnh báo",
-        "AFChemTX01.ApSuat;ApSuat;60;>;ALARM;Áp suất hệ thống vượt ngưỡng nguy hiểm",
+        "AFChemTX01.ApSuat;ApSuat;3;<;ALARM;Áp suất hệ thống quá thấp",
         "AFChemTX01.NhietDoBonTronGiua;NhietDoBonTronGiua;40;>;WARNING;Nhiệt độ bồn trộn g" +
             "iữa vượt ngưỡng cảnh báo",
         "AFChemTX01.DoAmMoiTruong;DoAmMoiTruong;60;>;WARNING;Độ ẩm môi trường vượt ngưỡng " +

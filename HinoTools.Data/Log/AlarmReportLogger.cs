@@ -784,10 +784,13 @@ namespace HinoTools.Data.Log
                 double sp7 = GetSystemTagValue("ThoiGianCaiDatXaHang");
                 double sp8 = GetSystemTagValue("ThoiGianCaiDatRungXaHang");
 
+                // Calculate effective setpoint for HutXaDayThem as (sp3 + sp5) because they run in parallel
+                double sp5Effective = sp3 + sp5;
+
                 // Check if any value has changed compared to lastSetpoints cache
                 bool hasChanged = false;
                 if (sp1 != lastSetpoints[0] || sp2 != lastSetpoints[1] || sp3 != lastSetpoints[2] ||
-                    sp4 != lastSetpoints[3] || sp5 != lastSetpoints[4] || sp6 != lastSetpoints[5] ||
+                    sp4 != lastSetpoints[3] || sp5Effective != lastSetpoints[4] || sp6 != lastSetpoints[5] ||
                     sp7 != lastSetpoints[6] || sp8 != lastSetpoints[7])
                 {
                     hasChanged = true;
@@ -801,7 +804,7 @@ namespace HinoTools.Data.Log
                                        $"`sp_thoi_gian_tron1` = {(int)sp2}, " +
                                        $"`sp_thoi_gian_xa_day` = {(int)sp3}, " +
                                        $"`sp_thoi_gian_rung_xa_day` = {(int)sp4}, " +
-                                       $"`sp_thoi_gian_hut_xa_day_them` = {(int)sp5}, " +
+                                       $"`sp_thoi_gian_hut_xa_day_them` = {(int)sp5Effective}, " +
                                        $"`sp_thoi_gian_tron2` = {(int)sp6}, " +
                                        $"`sp_thoi_gian_xa_hang` = {(int)sp7}, " +
                                        $"`sp_thoi_gian_rung_xa_hang` = {(int)sp8} " +
@@ -813,7 +816,7 @@ namespace HinoTools.Data.Log
                     lastSetpoints[1] = sp2;
                     lastSetpoints[2] = sp3;
                     lastSetpoints[3] = sp4;
-                    lastSetpoints[4] = sp5;
+                    lastSetpoints[4] = sp5Effective;
                     lastSetpoints[5] = sp6;
                     lastSetpoints[6] = sp7;
                     lastSetpoints[7] = sp8;
