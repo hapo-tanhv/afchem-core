@@ -1187,7 +1187,7 @@ namespace HinoTools.Data.Log
                 dataAccess.ConnectionString = GetConnectionStringWithDb();
 
                 // 0. Check if there is already an Active run for this device (prevents race condition and handles application restart)
-                string activeQuery = "SELECT r.id, r.batch_id FROM `runs` r " +
+                string activeQuery = "SELECT r.id, r.batch_id, b.start_time as batch_start_time FROM `runs` r " +
                                      "JOIN `batches` b ON r.batch_id = b.id " +
                                      $"WHERE b.device_name = '{deviceName}' AND r.status = 'Active' " +
                                      "ORDER BY r.id DESC LIMIT 1";
@@ -1197,11 +1197,21 @@ namespace HinoTools.Data.Log
                     activeRunId = Convert.ToInt32(activeDt.Rows[0]["id"]);
                     activeBatchId = Convert.ToInt32(activeDt.Rows[0]["batch_id"]);
                     System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] Re-linked to already Active Run ID: {activeRunId.Value}, Batch ID: {activeBatchId.Value}");
+
+                    // Check if parent batch's start_time is null, if so, update it
+                    if (activeDt.Rows[0]["batch_start_time"] == DBNull.Value)
+                    {
+                        string updateBatchQuery = $"UPDATE `batches` " +
+                                                  $"SET `start_time` = '{DateTime.Now:yyyy-MM-dd HH:mm:ss}' " +
+                                                  $"WHERE `id` = {activeBatchId.Value}";
+                        dataAccess.ExecuteNonQuery(updateBatchQuery);
+                        System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] Updated start_time for active Batch ID {activeBatchId.Value} since it was null.");
+                    }
                     return;
                 }
                 
                 // 1. Find the oldest 'Pending' run for this device based on execution_order
-                string findQuery = "SELECT r.id, r.batch_id, b.name as batch_name, b.status as batch_status FROM `runs` r " +
+                string findQuery = "SELECT r.id, r.batch_id, b.name as batch_name, b.status as batch_status, b.start_time as batch_start_time FROM `runs` r " +
                                    "JOIN `batches` b ON r.batch_id = b.id " +
                                    $"WHERE b.device_name = '{deviceName}' AND r.status = 'Pending' " +
                                    "ORDER BY r.execution_order ASC, r.id ASC LIMIT 1";
@@ -1220,14 +1230,15 @@ namespace HinoTools.Data.Log
                                             $"WHERE `id` = {runId}";
                     dataAccess.ExecuteNonQuery(updateRunQuery);
 
-                    // Update parent batch to Active if it is still Pending
-                    if (batchStatus == "Pending")
+                    // Update parent batch to Active if it is still Pending or start_time is null
+                    bool shouldUpdateBatch = batchStatus == "Pending" || dt.Rows[0]["batch_start_time"] == DBNull.Value;
+                    if (shouldUpdateBatch)
                     {
                         string updateBatchQuery = $"UPDATE `batches` " +
                                                   $"SET `status` = 'Active', `start_time` = '{DateTime.Now:yyyy-MM-dd HH:mm:ss}' " +
                                                   $"WHERE `id` = {batchId}";
                         dataAccess.ExecuteNonQuery(updateBatchQuery);
-                        System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] Activated Batch '{batchName}' (ID: {batchId}) due to first Run starting.");
+                        System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] Activated Batch '{batchName}' (ID: {batchId}) due to status Pending or start_time null.");
                     }
                     
                     activeRunId = runId;

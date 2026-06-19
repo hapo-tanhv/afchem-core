@@ -320,7 +320,7 @@ namespace HinoTools.Alarm.Control
                 }
 
                 // 2. Try to find the Active run first
-                string query = "SELECT r.id, r.batch_id FROM `runs` r " +
+                string query = "SELECT r.id, r.batch_id, b.start_time as batch_start_time FROM `runs` r " +
                                "JOIN `batches` b ON r.batch_id = b.id " +
                                $"WHERE b.device_name = '{deviceName}' AND r.status = 'Active' " +
                                "ORDER BY r.id DESC LIMIT 1";
@@ -331,6 +331,14 @@ namespace HinoTools.Alarm.Control
                     runId = Convert.ToInt32(dt.Rows[0]["id"]);
                     batchId = Convert.ToInt32(dt.Rows[0]["batch_id"]);
                     WriteDebugLog(string.Format("[GetActiveBatchAndRunId] Found Active Run ID: {0}, Batch ID: {1}", runId, batchId));
+
+                    // Check if parent batch's start_time is null, if so, update it
+                    if (dt.Rows[0]["batch_start_time"] == DBNull.Value)
+                    {
+                        string updateBatch = $"UPDATE `batches` SET `start_time` = '{nowStr}' WHERE `id` = {batchId}";
+                        this.dataAccess.ExecuteNonQuery(updateBatch);
+                        WriteDebugLog(string.Format("[GetActiveBatchAndRunId] Updated start_time for active Batch ID {0} since it was null.", batchId));
+                    }
                     return;
                 }
 
@@ -342,7 +350,7 @@ namespace HinoTools.Alarm.Control
                     return;
                 }
 
-                string fallbackQuery = "SELECT r.id, r.batch_id, b.status as batch_status FROM `runs` r " +
+                string fallbackQuery = "SELECT r.id, r.batch_id, b.status as batch_status, b.start_time as batch_start_time FROM `runs` r " +
                                        "JOIN `batches` b ON r.batch_id = b.id " +
                                        $"WHERE b.device_name = '{deviceName}' AND r.status = 'Pending' " +
                                        "ORDER BY r.execution_order ASC, r.id ASC LIMIT 1";
@@ -358,8 +366,9 @@ namespace HinoTools.Alarm.Control
                     string updateRun = $"UPDATE `runs` SET `status` = 'Active', `start_time` = '{nowStr}' WHERE `id` = {runId}";
                     this.dataAccess.ExecuteNonQuery(updateRun);
 
-                    // Update batch to Active if Pending
-                    if (batchStatus == "Pending")
+                    // Update batch to Active if Pending or start_time is null
+                    bool shouldUpdateBatch = batchStatus == "Pending" || dt.Rows[0]["batch_start_time"] == DBNull.Value;
+                    if (shouldUpdateBatch)
                     {
                         string updateBatch = $"UPDATE `batches` SET `status` = 'Active', `start_time` = '{nowStr}' WHERE `id` = {batchId}";
                         this.dataAccess.ExecuteNonQuery(updateBatch);
