@@ -239,6 +239,7 @@ namespace HinoTools.Data.Log
             CreateTableIfNotExists();
             AddBatchIdColumnIfNeeded(TableName);
             AddRunIdColumnIfNeeded(TableName);
+            ResolveOrphanPauseRecords();
 
             // HTTP API Server (Disabled/Cleared)
             System.Diagnostics.Debug.WriteLine("[AlarmReportLogger] HTTP Server (port 5500) is disabled.");
@@ -373,11 +374,22 @@ namespace HinoTools.Data.Log
                     if (prevRungXaHang > 0 && thoiGianRungXaHang == 0) CheckAndLogStageDurationAlarm("T008", prevRungXaHang);
                 }
 
-                // 1. Check for Reset event (Stop = 1 and active stage timer is reset to 0)
+                // 1. Check for Reset event (Stop = 1 and active stage timer is reset to 0, or all stage timers are 0)
                 bool isReset = false;
                 if (currentCongDoan > 0 && currentCongDoan < 5 && isStopped)
                 {
-                    if (currentCongDoan == 1 && hasThoiGianCapLieuStarted && thoiGianCapLieu == 0)
+                    bool allTimersZero = thoiGianCapLieu == 0 &&
+                                         thoiGianTron1 == 0 &&
+                                         thoiGianXaDay == 0 &&
+                                         thoiGianRungXaDay == 0 &&
+                                         thoiGianHutXa == 0 &&
+                                         thoiGianTron2 == 0 &&
+                                         thoiGianXaHang == 0 &&
+                                         thoiGianRungXaHang == 0;
+
+                    if (allTimersZero)
+                        isReset = true;
+                    else if (currentCongDoan == 1 && hasThoiGianCapLieuStarted && thoiGianCapLieu == 0)
                         isReset = true;
                     else if (currentCongDoan == 2 && hasThoiGianTron1Started && thoiGianTron1 == 0)
                         isReset = true;
@@ -397,6 +409,8 @@ namespace HinoTools.Data.Log
                         // Capture final state in alarmreport log
                         InsertAlarmReport();
                         
+                        UpdatePauseRecord(DateTime.Now); // Close the pause event if any
+                        
                         // Fail the run
                         FailActiveBatch();
                         
@@ -415,23 +429,48 @@ namespace HinoTools.Data.Log
                         }
                         else
                         {
-                            // Reset started flags when stopped/paused to avoid false transitions on resume
-                            ResetFlags();
+                            bool isPauseActive = thoiGianCapLieu > 0 ||
+                                                 thoiGianTron1 > 0 ||
+                                                 thoiGianXaDay > 0 ||
+                                                 thoiGianRungXaDay > 0 ||
+                                                 thoiGianHutXa > 0 ||
+                                                 thoiGianTron2 > 0 ||
+                                                 thoiGianXaHang > 0 ||
+                                                 thoiGianRungXaHang > 0;
 
-                            // Track timeout for long stopped state (e.g. 2 hours)
-                            if (stopStartTime == null)
+                            if (isPauseActive)
                             {
-                                stopStartTime = DateTime.Now;
+                                // Reset started flags when stopped/paused to avoid false transitions on resume
+                                ResetFlags();
+
+                                // Track timeout for long stopped state (e.g. 2 hours)
+                                if (stopStartTime == null)
+                                {
+                                    stopStartTime = DateTime.Now;
+                                    InsertPauseRecord(); // Log pause event!
+                                }
+                                else
+                                {
+                                    double elapsed = (DateTime.Now - stopStartTime.Value).TotalSeconds;
+                                    if (elapsed >= StopTimeout)
+                                    {
+                                        System.Diagnostics.Debug.WriteLine(string.Format("[AlarmReportLogger] Run stopped for {0}s. Auto-cleaning and marking as Error.", elapsed));
+                                        InsertAlarmReport();
+                                        UpdatePauseRecord(DateTime.Now); // Close the pause event
+                                        FailActiveBatch();
+                                        currentCongDoan = 0; // Return to Idle
+                                        stopStartTime = null;
+                                    }
+                                }
                             }
                             else
                             {
-                                double elapsed = (DateTime.Now - stopStartTime.Value).TotalSeconds;
-                                if (elapsed >= StopTimeout)
+                                // Stop = 1 but all registers are 0. This is not a temporary pause.
+                                // Close the pause record if it was active.
+                                if (stopStartTime != null)
                                 {
-                                    System.Diagnostics.Debug.WriteLine(string.Format("[AlarmReportLogger] Run stopped for {0}s. Auto-cleaning and marking as Error.", elapsed));
-                                    InsertAlarmReport();
-                                    FailActiveBatch();
-                                    currentCongDoan = 0; // Return to Idle
+                                    System.Diagnostics.Debug.WriteLine("[AlarmReportLogger] Stop = 1 and all registers are 0. Closing existing pause record.");
+                                    UpdatePauseRecord(DateTime.Now);
                                     stopStartTime = null;
                                 }
                             }
@@ -443,6 +482,7 @@ namespace HinoTools.Data.Log
                         if (stopStartTime != null)
                         {
                             System.Diagnostics.Debug.WriteLine("[AlarmReportLogger] Machine resumed. Resetting timeout tracker.");
+                            UpdatePauseRecord(DateTime.Now); // Close the pause event
                             stopStartTime = null;
                         }
 
@@ -647,9 +687,15 @@ namespace HinoTools.Data.Log
             if (string.IsNullOrEmpty(rawValue)) return "0";
 
             if (string.Equals(alias, "CaiDatApSuat", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(alias, "DatNguongNhietDoMoiTruong", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(alias, "ApSuat", StringComparison.OrdinalIgnoreCase))
+            {
+                if (double.TryParse(rawValue, out double val))
+                {
+                    return Math.Round(val / 100.0, 2).ToString(System.Globalization.CultureInfo.InvariantCulture);
+                }
+            }
+            else if (string.Equals(alias, "DatNguongNhietDoMoiTruong", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(alias, "DatNguongDoAmMoiTruong", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(alias, "ApSuat", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(alias, "NhietDoMoiTruong", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(alias, "DoAmMoiTruong", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(alias, "NhietDoBonTronTren", StringComparison.OrdinalIgnoreCase) ||
@@ -658,7 +704,7 @@ namespace HinoTools.Data.Log
             {
                 if (double.TryParse(rawValue, out double val))
                 {
-                    return (val / 10.0).ToString(System.Globalization.CultureInfo.InvariantCulture);
+                    return Math.Round(val / 10.0, 2).ToString(System.Globalization.CultureInfo.InvariantCulture);
                 }
             }
             return rawValue;
@@ -690,16 +736,19 @@ namespace HinoTools.Data.Log
             double.TryParse(item.Tag.Value, out double val);
 
             if (string.Equals(alias, "CaiDatApSuat", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(alias, "DatNguongNhietDoMoiTruong", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(alias, "ApSuat", StringComparison.OrdinalIgnoreCase))
+            {
+                val = Math.Round(val / 100.0, 2);
+            }
+            else if (string.Equals(alias, "DatNguongNhietDoMoiTruong", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(alias, "DatNguongDoAmMoiTruong", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(alias, "ApSuat", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(alias, "NhietDoMoiTruong", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(alias, "DoAmMoiTruong", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(alias, "NhietDoBonTronTren", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(alias, "NhietDoBonTronGiua", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(alias, "NhietDoBonTronDuoi", StringComparison.OrdinalIgnoreCase))
             {
-                val = val / 10.0;
+                val = Math.Round(val / 10.0, 2);
             }
 
             return val;
@@ -725,16 +774,19 @@ namespace HinoTools.Data.Log
                 {
                     double.TryParse(item.Tag.Value, out double val);
                     if (string.Equals(subTagName, "CaiDatApSuat", StringComparison.OrdinalIgnoreCase) ||
-                        string.Equals(subTagName, "DatNguongNhietDoMoiTruong", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(subTagName, "ApSuat", StringComparison.OrdinalIgnoreCase))
+                    {
+                        val = Math.Round(val / 100.0, 2);
+                    }
+                    else if (string.Equals(subTagName, "DatNguongNhietDoMoiTruong", StringComparison.OrdinalIgnoreCase) ||
                         string.Equals(subTagName, "DatNguongDoAmMoiTruong", StringComparison.OrdinalIgnoreCase) ||
-                        string.Equals(subTagName, "ApSuat", StringComparison.OrdinalIgnoreCase) ||
                         string.Equals(subTagName, "NhietDoMoiTruong", StringComparison.OrdinalIgnoreCase) ||
                         string.Equals(subTagName, "DoAmMoiTruong", StringComparison.OrdinalIgnoreCase) ||
                         string.Equals(subTagName, "NhietDoBonTronTren", StringComparison.OrdinalIgnoreCase) ||
                         string.Equals(subTagName, "NhietDoBonTronGiua", StringComparison.OrdinalIgnoreCase) ||
                         string.Equals(subTagName, "NhietDoBonTronDuoi", StringComparison.OrdinalIgnoreCase))
                     {
-                        val = val / 10.0;
+                        val = Math.Round(val / 10.0, 2);
                     }
                     return val;
                 }
@@ -751,16 +803,19 @@ namespace HinoTools.Data.Log
             {
                 double.TryParse(tag.Value, out double val);
                 if (string.Equals(subTagName, "CaiDatApSuat", StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(subTagName, "DatNguongNhietDoMoiTruong", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(subTagName, "ApSuat", StringComparison.OrdinalIgnoreCase))
+                {
+                    val = Math.Round(val / 100.0, 2);
+                }
+                else if (string.Equals(subTagName, "DatNguongNhietDoMoiTruong", StringComparison.OrdinalIgnoreCase) ||
                     string.Equals(subTagName, "DatNguongDoAmMoiTruong", StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(subTagName, "ApSuat", StringComparison.OrdinalIgnoreCase) ||
                     string.Equals(subTagName, "NhietDoMoiTruong", StringComparison.OrdinalIgnoreCase) ||
                     string.Equals(subTagName, "DoAmMoiTruong", StringComparison.OrdinalIgnoreCase) ||
                     string.Equals(subTagName, "NhietDoBonTronTren", StringComparison.OrdinalIgnoreCase) ||
                     string.Equals(subTagName, "NhietDoBonTronGiua", StringComparison.OrdinalIgnoreCase) ||
                     string.Equals(subTagName, "NhietDoBonTronDuoi", StringComparison.OrdinalIgnoreCase))
                 {
-                    val = val / 10.0;
+                    val = Math.Round(val / 10.0, 2);
                 }
                 return val;
             }
@@ -1574,6 +1629,102 @@ namespace HinoTools.Data.Log
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] InsertRealtimeInfoEvent ERROR: {ex.Message}");
+                return false;
+            }
+        }
+
+        private void ResolveOrphanPauseRecords()
+        {
+            try
+            {
+                dataAccess.ConnectionString = GetConnectionStringWithDb();
+                string tblName = "realtime_alarms";
+                string formattedTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+
+                string query = $"UPDATE `{tblName}` " +
+                               $"SET `restore_time` = '{formattedTime}' " +
+                               $"WHERE `DeviceName` = '{deviceName}' AND `TagName` = 'System' AND `Severity` = 'INFO' AND `Message` = 'Tạm dừng máy' AND `restore_time` IS NULL";
+
+                int rows = dataAccess.ExecuteNonQuery(query);
+                if (rows > 0)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] Resolved {rows} orphan pause records for device {deviceName} at startup.");
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] ResolveOrphanPauseRecords ERROR: {ex.Message}");
+            }
+        }
+
+        private bool InsertPauseRecord()
+        {
+            try
+            {
+                if (!CreateDatabaseIfNotExists()) return false;
+
+                dataAccess.ConnectionString = GetConnectionStringWithDb();
+                string tblName = "realtime_alarms";
+                
+                string checkQuery = $"SELECT COUNT(*) FROM `{tblName}` WHERE `DeviceName` = '{deviceName}' AND `TagName` = 'System' AND `Severity` = 'INFO' AND `Message` = 'Tạm dừng máy' AND `restore_time` IS NULL";
+                var countObj = dataAccess.ExecuteScalarQuery(checkQuery);
+                if (countObj != null && countObj != DBNull.Value && Convert.ToInt32(countObj) > 0)
+                {
+                    return true; // Already logged, skip duplicate
+                }
+
+                string batchIdValue = activeBatchId.HasValue ? activeBatchId.Value.ToString() : "NULL";
+                string runIdValue = activeRunId.HasValue ? activeRunId.Value.ToString() : "NULL";
+
+                string query = $"INSERT INTO `{tblName}` " +
+                    $"(`DateTime`, `DeviceName`, `TagName`, `Value`, `Threshold`, `Operator`, `Message`, `QuyTrinh`, `CongDoan`, `batchId`, `runId`, `Severity`, `restore_time`) " +
+                    $"VALUES (" +
+                    $"'{DateTime.Now:yyyy-MM-dd HH:mm:ss}', " +
+                    $"'{deviceName}', " +
+                    $"'System', " +
+                    $"0, " +
+                    $"0, " +
+                    $"'=', " +
+                    $"'Tạm dừng máy', " +
+                    $"{currentQuyTrinh}, " +
+                    $"'Tạm dừng', " +
+                    $"{batchIdValue}, " +
+                    $"{runIdValue}, " +
+                    $"'INFO', " +
+                    $"NULL)";
+
+                return dataAccess.ExecuteNonQuery(query) >= 0;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] InsertPauseRecord ERROR: {ex.Message}");
+                return false;
+            }
+        }
+
+        private bool UpdatePauseRecord(DateTime restoreTime)
+        {
+            try
+            {
+                dataAccess.ConnectionString = GetConnectionStringWithDb();
+                string tblName = "realtime_alarms";
+                string formattedTime = restoreTime.ToString("yyyy-MM-dd HH:mm:ss");
+
+                string query = $"UPDATE `{tblName}` " +
+                               $"SET `restore_time` = '{formattedTime}' " +
+                               $"WHERE `DeviceName` = '{deviceName}' AND `TagName` = 'System' AND `Severity` = 'INFO' AND `Message` = 'Tạm dừng máy' AND `restore_time` IS NULL";
+
+                int rows = dataAccess.ExecuteNonQuery(query);
+                if (rows > 0)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] Resolved pause record for device {deviceName} at {formattedTime}.");
+                    return true;
+                }
+                return false;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] UpdatePauseRecord ERROR: {ex.Message}");
                 return false;
             }
         }
