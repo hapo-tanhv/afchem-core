@@ -448,6 +448,7 @@ namespace HinoTools.Data.Log
                                 {
                                     stopStartTime = DateTime.Now;
                                     InsertPauseRecord(); // Log pause event!
+                                    UpdateRunPauseStatus(activeRunId, 1); // Set runs.is_paused = 1
                                 }
                                 else
                                 {
@@ -471,6 +472,7 @@ namespace HinoTools.Data.Log
                                 {
                                     System.Diagnostics.Debug.WriteLine("[AlarmReportLogger] Stop = 1 and all registers are 0. Closing existing pause record.");
                                     UpdatePauseRecord(DateTime.Now);
+                                    UpdateRunPauseStatus(activeRunId, 0); // Set runs.is_paused = 0
                                     stopStartTime = null;
                                 }
                             }
@@ -483,6 +485,7 @@ namespace HinoTools.Data.Log
                         {
                             System.Diagnostics.Debug.WriteLine("[AlarmReportLogger] Machine resumed. Resetting timeout tracker.");
                             UpdatePauseRecord(DateTime.Now); // Close the pause event
+                            UpdateRunPauseStatus(activeRunId, 0); // Set runs.is_paused = 0
                             stopStartTime = null;
                         }
 
@@ -895,7 +898,7 @@ namespace HinoTools.Data.Log
                 string nowStr = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
 
                 // 1. Mark the active Run as 'Error'
-                string failRunQuery = string.Format("UPDATE `runs` SET `status` = 'Error', `end_time` = '{0}' WHERE `id` = {1}", nowStr, activeRunId.Value);
+                string failRunQuery = string.Format("UPDATE `runs` SET `status` = 'Error', `end_time` = '{0}', `is_paused` = 0 WHERE `id` = {1}", nowStr, activeRunId.Value);
                 dataAccess.ExecuteNonQuery(failRunQuery);
                 System.Diagnostics.Debug.WriteLine(string.Format("[AlarmReportLogger] Marked Run ID {0} as Error.", activeRunId.Value));
 
@@ -1218,6 +1221,23 @@ namespace HinoTools.Data.Log
                     System.Diagnostics.Debug.WriteLine($"[Migration] ERROR adding column execution_order to runs: {colEx.Message}");
                 }
 
+                // Check and add is_paused column to runs table if it doesn't exist
+                try
+                {
+                    string checkColSql = "SHOW COLUMNS FROM `runs` LIKE 'is_paused'";
+                    var colResult = dataAccess.ExecuteScalarQuery(checkColSql);
+                    if (colResult == null || colResult == DBNull.Value)
+                    {
+                        string alterSql = "ALTER TABLE `runs` ADD COLUMN `is_paused` TINYINT NOT NULL DEFAULT 0 AFTER `execution_order`";
+                        dataAccess.ExecuteNonQuery(alterSql);
+                        System.Diagnostics.Debug.WriteLine("[Migration] Added column is_paused to runs table successfully.");
+                    }
+                }
+                catch (Exception colEx)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[Migration] ERROR adding column is_paused to runs: {colEx.Message}");
+                }
+
                 // Task 1.4: Historical data migration (One-time check and execution)
                 string migrateRunsSql = "INSERT INTO `runs` (`batch_id`, `run_number`, `name`, `status`, `start_time`, `end_time`, `created_at`) " +
                                         "SELECT b.id, 1, CONCAT(b.name, '-Me01'), b.status, b.start_time, b.end_time, b.created_at " +
@@ -1365,7 +1385,7 @@ namespace HinoTools.Data.Log
 
                 // 1. Complete the active Run
                 string completeRunQuery = $"UPDATE `runs` " +
-                                           $"SET `status` = 'Completed', `end_time` = '{nowStr}' " +
+                                           $"SET `status` = 'Completed', `end_time` = '{nowStr}', `is_paused` = 0 " +
                                            $"WHERE `id` = {activeRunId.Value}";
                 dataAccess.ExecuteNonQuery(completeRunQuery);
                 System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] Completed Run ID {activeRunId.Value} successfully.");
@@ -1726,6 +1746,21 @@ namespace HinoTools.Data.Log
             {
                 System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] UpdatePauseRecord ERROR: {ex.Message}");
                 return false;
+            }
+        }
+
+        private void UpdateRunPauseStatus(int? runId, int isPaused)
+        {
+            if (runId == null) return;
+            try
+            {
+                dataAccess.ConnectionString = GetConnectionStringWithDb();
+                string query = string.Format("UPDATE `runs` SET `is_paused` = {0} WHERE `id` = {1}", isPaused, runId.Value);
+                dataAccess.ExecuteNonQuery(query);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] UpdateRunPauseStatus ERROR: {ex.Message}");
             }
         }
 

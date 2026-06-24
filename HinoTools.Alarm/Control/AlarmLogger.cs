@@ -232,7 +232,7 @@ namespace HinoTools.Alarm.Control
                         }
 
                         // Mark this run as Error because it was aborted by a new run start
-                        string completeRunQuery = string.Format("UPDATE `runs` SET `status` = 'Error', `end_time` = '{0}' WHERE `id` = {1}", nowStr, activeRId);
+                        string completeRunQuery = string.Format("UPDATE `runs` SET `status` = 'Error', `end_time` = '{0}', `is_paused` = 0 WHERE `id` = {1}", nowStr, activeRId);
                         this.dataAccess.ExecuteNonQuery(completeRunQuery);
 
                         // Create a compensating run for the parent batch
@@ -363,7 +363,7 @@ namespace HinoTools.Alarm.Control
                     string batchStatus = dt.Rows[0]["batch_status"].ToString();
 
                     // Update run to Active
-                    string updateRun = $"UPDATE `runs` SET `status` = 'Active', `start_time` = '{nowStr}' WHERE `id` = {runId}";
+                    string updateRun = $"UPDATE `runs` SET `status` = 'Active', `start_time` = '{nowStr}', `is_paused` = 0 WHERE `id` = {runId}";
                     this.dataAccess.ExecuteNonQuery(updateRun);
 
                     // Update batch to Active if Pending or start_time is null
