@@ -330,6 +330,8 @@ namespace HinoTools.Data.Log
                             activeBatchId = dbBatchId;
                             currentCongDoan = 1;
                             ResetFlags();
+                            hasThoiGianCapLieuStarted = true;
+                            InsertRealtimeInfoEvent("T001", "Bắt đầu cấp liệu");
                             lastAlarmReportTime = DateTime.MinValue; // Trigger instant logging for the new run
                         }
                     }
