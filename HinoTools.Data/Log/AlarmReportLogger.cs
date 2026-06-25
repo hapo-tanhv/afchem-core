@@ -4,6 +4,7 @@ using HinoTools.Data.Database;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Data;
 using System.Linq;
 using System.Text;
 
@@ -62,6 +63,10 @@ namespace HinoTools.Data.Log
 
         private DateTime lastAlarmReportTime = DateTime.MinValue;
         private double[] lastSetpoints = new double[8] { -1, -1, -1, -1, -1, -1, -1, -1 };
+
+        // Accumulator State
+        private Dictionary<string, double> accumulatedTimers = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+        private Dictionary<string, double> previousTimerValues = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
 
         #endregion
 
@@ -330,6 +335,8 @@ namespace HinoTools.Data.Log
                             activeBatchId = dbBatchId;
                             currentCongDoan = 1;
                             ResetFlags();
+                            ResetAccumulators();
+                            RecoverAccumulatorsFromDb(dbRunId);
                             hasThoiGianCapLieuStarted = true;
                             InsertRealtimeInfoEvent("T001", "Bắt đầu cấp liệu");
                             lastAlarmReportTime = DateTime.MinValue; // Trigger instant logging for the new run
@@ -350,6 +357,28 @@ namespace HinoTools.Data.Log
                 double thoiGianTron2 = GetTagValueByAlias("ThoiGianTron2");
                 double thoiGianRungXaHang = GetTagValueByAlias("ThoiGianRungXaHang");
                 double thoiGianXaHang = GetTagValueByAlias("ThoiGianXaHang");
+                double thoiGianXaDay = GetTagValueByAlias("ThoiGianXaDay");
+                double thoiGianRungXaDay = GetTagValueByAlias("ThoiGianRungXaDay");
+
+                // Fallback NaN values to previous cycle values to prevent false zero-drops during comms jitter
+                if (double.IsNaN(thoiGianCapLieu)) thoiGianCapLieu = prevCapLieu;
+                if (double.IsNaN(thoiGianTron1)) thoiGianTron1 = prevTron1;
+                if (double.IsNaN(thoiGianHutXa)) thoiGianHutXa = prevHutXaDay;
+                if (double.IsNaN(thoiGianTron2)) thoiGianTron2 = prevTron2;
+                if (double.IsNaN(thoiGianRungXaHang)) thoiGianRungXaHang = prevRungXaHang;
+                if (double.IsNaN(thoiGianXaHang)) thoiGianXaHang = prevXaHang;
+                if (double.IsNaN(thoiGianXaDay)) thoiGianXaDay = prevXaDay;
+                if (double.IsNaN(thoiGianRungXaDay)) thoiGianRungXaDay = prevRungXaDay;
+
+                // Update software accumulators
+                UpdateAccumulator("ThoiGianCapLieu", thoiGianCapLieu);
+                UpdateAccumulator("ThoiGianTron1", thoiGianTron1);
+                UpdateAccumulator("ThoiGianXaDay", thoiGianXaDay);
+                UpdateAccumulator("ThoiGianRungXaDay", thoiGianRungXaDay);
+                UpdateAccumulator("ThoiGianHutXaDay", thoiGianHutXa);
+                UpdateAccumulator("ThoiGianTron2", thoiGianTron2);
+                UpdateAccumulator("ThoiGianXaHang", thoiGianXaHang);
+                UpdateAccumulator("ThoiGianRungXaHang", thoiGianRungXaHang);
 
                 double stopValue = GetSystemTagValue("Stop");
                 double runValue = GetSystemTagValue("Run");
@@ -360,20 +389,17 @@ namespace HinoTools.Data.Log
 
                 int previousCongDoan = currentCongDoan;
 
-                double thoiGianXaDay = GetTagValueByAlias("ThoiGianXaDay");
-                double thoiGianRungXaDay = GetTagValueByAlias("ThoiGianRungXaDay");
-
-                // Falling edge detection for stage duration alarms
-                if (activeRunId != null)
+                // Falling edge detection for stage duration alarms (using accumulated values and ensuring it's not a stop/pause reset)
+                if (activeRunId != null && !isStopped)
                 {
-                    if (prevCapLieu > 0 && thoiGianCapLieu == 0) CheckAndLogStageDurationAlarm("T001", prevCapLieu);
-                    if (prevTron1 > 0 && thoiGianTron1 == 0) CheckAndLogStageDurationAlarm("T002", prevTron1);
-                    if (prevXaDay > 0 && thoiGianXaDay == 0) CheckAndLogStageDurationAlarm("T003", prevXaDay);
-                    if (prevRungXaDay > 0 && thoiGianRungXaDay == 0) CheckAndLogStageDurationAlarm("T004", prevRungXaDay);
-                    if (prevHutXaDay > 0 && thoiGianHutXa == 0) CheckAndLogStageDurationAlarm("T005", prevHutXaDay);
-                    if (prevTron2 > 0 && thoiGianTron2 == 0) CheckAndLogStageDurationAlarm("T006", prevTron2);
-                    if (prevXaHang > 0 && thoiGianXaHang == 0) CheckAndLogStageDurationAlarm("T007", prevXaHang);
-                    if (prevRungXaHang > 0 && thoiGianRungXaHang == 0) CheckAndLogStageDurationAlarm("T008", prevRungXaHang);
+                    if (prevCapLieu > 0 && thoiGianCapLieu == 0) CheckAndLogStageDurationAlarm("T001", GetAccumulatedValue("ThoiGianCapLieu"));
+                    if (prevTron1 > 0 && thoiGianTron1 == 0) CheckAndLogStageDurationAlarm("T002", GetAccumulatedValue("ThoiGianTron1"));
+                    if (prevXaDay > 0 && thoiGianXaDay == 0) CheckAndLogStageDurationAlarm("T003", GetAccumulatedValue("ThoiGianXaDay"));
+                    if (prevRungXaDay > 0 && thoiGianRungXaDay == 0) CheckAndLogStageDurationAlarm("T004", GetAccumulatedValue("ThoiGianRungXaDay"));
+                    if (prevHutXaDay > 0 && thoiGianHutXa == 0) CheckAndLogStageDurationAlarm("T005", GetAccumulatedValue("ThoiGianHutXaDay"));
+                    if (prevTron2 > 0 && thoiGianTron2 == 0) CheckAndLogStageDurationAlarm("T006", GetAccumulatedValue("ThoiGianTron2"));
+                    if (prevXaHang > 0 && thoiGianXaHang == 0) CheckAndLogStageDurationAlarm("T007", GetAccumulatedValue("ThoiGianXaHang"));
+                    if (prevRungXaHang > 0 && thoiGianRungXaHang == 0) CheckAndLogStageDurationAlarm("T008", GetAccumulatedValue("ThoiGianRungXaHang"));
                 }
 
                 // 1. Check for Reset event (Stop = 1 and active stage timer is reset to 0, or all stage timers are 0)
@@ -501,8 +527,12 @@ namespace HinoTools.Data.Log
                             currentQuyTrinh = GetMaxQuyTrinhFromDb() + 1;
                             currentCongDoan = 1;
                             ResetFlags();
-                            hasThoiGianCapLieuStarted = true;
+                            ResetAccumulators();
                             LinkOrCreateActiveBatch();
+                            if (activeRunId.HasValue)
+                            {
+                                RecoverAccumulatorsFromDb(activeRunId.Value);
+                            }
                             InsertRealtimeInfoEvent("T001", "Bắt đầu cấp liệu");
                             lastAlarmReportTime = DateTime.MinValue;
                         }
@@ -515,6 +545,7 @@ namespace HinoTools.Data.Log
                                 if (hasThoiGianCapLieuStarted && thoiGianCapLieu == 0 && thoiGianTron1 > 0)
                                 {
                                     currentCongDoan = 2;
+                                    ResetAccumulatorForAlias("ThoiGianTron1");
                                     InsertRealtimeInfoEvent("T002", "Bắt đầu trộn lần 1");
                                 }
                             }
@@ -525,6 +556,9 @@ namespace HinoTools.Data.Log
                                 if (hasThoiGianTron1Started && thoiGianTron1 == 0 && (thoiGianXaDay > 0 || thoiGianRungXaDay > 0 || thoiGianHutXa > 0))
                                 {
                                     currentCongDoan = 3;
+                                    ResetAccumulatorForAlias("ThoiGianXaDay");
+                                    ResetAccumulatorForAlias("ThoiGianRungXaDay");
+                                    ResetAccumulatorForAlias("ThoiGianHutXaDay");
                                     InsertRealtimeInfoEvent("T003", "Bắt đầu xả đáy");
                                 }
                             }
@@ -544,6 +578,7 @@ namespace HinoTools.Data.Log
                                 if (hasThoiGianHutXaStarted && thoiGianHutXa == 0 && thoiGianTron2 > 0)
                                 {
                                     currentCongDoan = 4;
+                                    ResetAccumulatorForAlias("ThoiGianTron2");
                                     InsertRealtimeInfoEvent("T006", "Bắt đầu trộn lần 2");
                                 }
                             }
@@ -554,6 +589,8 @@ namespace HinoTools.Data.Log
                                 if (hasThoiGianTron2Started && thoiGianTron2 == 0 && (thoiGianXaHang > 0 || thoiGianRungXaHang > 0))
                                 {
                                     currentCongDoan = 5;
+                                    ResetAccumulatorForAlias("ThoiGianXaHang");
+                                    ResetAccumulatorForAlias("ThoiGianRungXaHang");
                                     InsertRealtimeInfoEvent("T007", "Bắt đầu xả hàng");
                                 }
                             }
@@ -593,8 +630,12 @@ namespace HinoTools.Data.Log
                         currentQuyTrinh = GetMaxQuyTrinhFromDb() + 1;
                         currentCongDoan = 1;
                         ResetFlags();
-                        hasThoiGianCapLieuStarted = true;
+                        ResetAccumulators();
                         LinkOrCreateActiveBatch();
+                        if (activeRunId.HasValue)
+                        {
+                            RecoverAccumulatorsFromDb(activeRunId.Value);
+                        }
                         InsertRealtimeInfoEvent("T001", "Bắt đầu cấp liệu");
                         lastAlarmReportTime = DateTime.MinValue; // Ensure first row logs instantly
                     }
@@ -678,12 +719,139 @@ namespace HinoTools.Data.Log
             prevXaHang = 0;
             prevRungXaHang = 0;
 
+            ResetPreviousTimerValues();
+
             if (lastSetpoints != null)
             {
                 for (int i = 0; i < lastSetpoints.Length; i++)
                 {
                     lastSetpoints[i] = -1;
                 }
+            }
+        }
+
+        private void ResetPreviousTimerValues()
+        {
+            var keys = new List<string>(previousTimerValues.Keys);
+            foreach (var key in keys)
+            {
+                previousTimerValues[key] = 0;
+            }
+            System.Diagnostics.Debug.WriteLine("[AlarmReportLogger] Reset previous timer values cache to 0.");
+        }
+
+        private void ResetAccumulators()
+        {
+            accumulatedTimers.Clear();
+            previousTimerValues.Clear();
+            System.Diagnostics.Debug.WriteLine("[AlarmReportLogger] Reset all accumulated timers and previous value cache.");
+        }
+
+        private void ResetAccumulatorForAlias(string alias)
+        {
+            accumulatedTimers[alias] = 0;
+            previousTimerValues.Remove(alias);
+            System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] Reset accumulator and removed previous value cache for stage alias '{alias}'.");
+        }
+
+        private void UpdateAccumulator(string alias, double currentVal)
+        {
+            if (double.IsNaN(currentVal)) return;
+
+            if (!accumulatedTimers.ContainsKey(alias))
+            {
+                accumulatedTimers[alias] = 0;
+            }
+
+            if (!previousTimerValues.ContainsKey(alias))
+            {
+                // First time reading this tag: initialize previous value to currentVal
+                previousTimerValues[alias] = currentVal;
+                return;
+            }
+
+            double prevVal = previousTimerValues[alias];
+
+            if (currentVal >= prevVal)
+            {
+                double delta = currentVal - prevVal;
+                accumulatedTimers[alias] += delta;
+            }
+            else
+            {
+                // Reset detected: add currentVal if it's > 0
+                if (currentVal > 0)
+                {
+                    accumulatedTimers[alias] += currentVal;
+                }
+            }
+
+            previousTimerValues[alias] = currentVal;
+        }
+
+        private double GetAccumulatedValue(string alias)
+        {
+            if (accumulatedTimers.TryGetValue(alias, out double val))
+            {
+                return Math.Round(val, 2);
+            }
+            return 0;
+        }
+
+        private bool IsStageTimerAlias(string alias)
+        {
+            if (string.IsNullOrEmpty(alias)) return false;
+            return string.Equals(alias, "ThoiGianCapLieu", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(alias, "ThoiGianTron1", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(alias, "ThoiGianXaDay", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(alias, "ThoiGianRungXaDay", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(alias, "ThoiGianHutXaDay", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(alias, "ThoiGianTron2", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(alias, "ThoiGianXaHang", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(alias, "ThoiGianRungXaHang", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private void RecoverAccumulatorsFromDb(int runId)
+        {
+            try
+            {
+                dataAccess.ConnectionString = GetConnectionStringWithDb();
+                string query = "SELECT " +
+                               "  MAX(CAST(`ThoiGianCapLieu` AS DECIMAL(10,2))) AS ThoiGianCapLieu, " +
+                               "  MAX(CAST(`ThoiGianTron1` AS DECIMAL(10,2))) AS ThoiGianTron1, " +
+                               "  MAX(CAST(`ThoiGianXaDay` AS DECIMAL(10,2))) AS ThoiGianXaDay, " +
+                               "  MAX(CAST(`ThoiGianRungXaDay` AS DECIMAL(10,2))) AS ThoiGianRungXaDay, " +
+                               "  MAX(CAST(`ThoiGianHutXaDay` AS DECIMAL(10,2))) AS ThoiGianHutXaDay, " +
+                               "  MAX(CAST(`ThoiGianTron2` AS DECIMAL(10,2))) AS ThoiGianTron2, " +
+                               "  MAX(CAST(`ThoiGianXaHang` AS DECIMAL(10,2))) AS ThoiGianXaHang, " +
+                               "  MAX(CAST(`ThoiGianRungXaHang` AS DECIMAL(10,2))) AS ThoiGianRungXaHang " +
+                               $"FROM `{TableName}` WHERE `runId` = {runId}";
+
+                var dt = dataAccess.ExecuteQuery(query);
+                if (dt != null && dt.Rows.Count > 0)
+                {
+                    var row = dt.Rows[0];
+                    string[] aliases = {
+                        "ThoiGianCapLieu", "ThoiGianTron1", "ThoiGianXaDay",
+                        "ThoiGianRungXaDay", "ThoiGianHutXaDay", "ThoiGianTron2",
+                        "ThoiGianXaHang", "ThoiGianRungXaHang"
+                    };
+
+                    foreach (var alias in aliases)
+                    {
+                        if (row[alias] != DBNull.Value)
+                        {
+                            double val = Convert.ToDouble(row[alias]);
+                            accumulatedTimers[alias] = val;
+                            previousTimerValues.Remove(alias);
+                            System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] Recovered accumulator for '{alias}': {val}");
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] ERROR recovering accumulators from DB: {ex.Message}");
             }
         }
 
@@ -736,9 +904,10 @@ namespace HinoTools.Data.Log
                 }
             }
 
-            if (item.Tag?.Value == null) return 0;
+            if (item.Tag?.Value == null) return double.NaN;
 
-            double.TryParse(item.Tag.Value, out double val);
+            double val;
+            if (!double.TryParse(item.Tag.Value, out val)) return double.NaN;
 
             if (string.Equals(alias, "CaiDatApSuat", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(alias, "ApSuat", StringComparison.OrdinalIgnoreCase))
@@ -1487,8 +1656,16 @@ namespace HinoTools.Data.Log
                         string.Equals(item.Alias, "QuyTrinh", StringComparison.OrdinalIgnoreCase))
                         continue;
 
-                    var value = item.Tag?.Value ?? "0";
-                    value = GetScaledValueString(item.Alias, value);
+                    string value;
+                    if (IsStageTimerAlias(item.Alias))
+                    {
+                        value = GetAccumulatedValue(item.Alias).ToString(System.Globalization.CultureInfo.InvariantCulture);
+                    }
+                    else
+                    {
+                        value = item.Tag?.Value ?? "0";
+                        value = GetScaledValueString(item.Alias, value);
+                    }
                     fieldBuilder.Append($", `{item.Alias}`");
                     valueBuilder.Append($", '{value}'");
                 }
