@@ -796,6 +796,30 @@ namespace HinoTools.Data.Log
                    string.Equals(alias, "ThoiGianRungXaHang", StringComparison.OrdinalIgnoreCase);
         }
 
+        private bool IsActiveStageTimerForCongDoan(string alias, int congDoan)
+        {
+            if (string.IsNullOrEmpty(alias)) return false;
+
+            switch (congDoan)
+            {
+                case 1:
+                    return string.Equals(alias, "ThoiGianCapLieu", StringComparison.OrdinalIgnoreCase);
+                case 2:
+                    return string.Equals(alias, "ThoiGianTron1", StringComparison.OrdinalIgnoreCase);
+                case 3:
+                    return string.Equals(alias, "ThoiGianXaDay", StringComparison.OrdinalIgnoreCase) ||
+                           string.Equals(alias, "ThoiGianRungXaDay", StringComparison.OrdinalIgnoreCase) ||
+                           string.Equals(alias, "ThoiGianHutXaDay", StringComparison.OrdinalIgnoreCase);
+                case 4:
+                    return string.Equals(alias, "ThoiGianTron2", StringComparison.OrdinalIgnoreCase);
+                case 5:
+                    return string.Equals(alias, "ThoiGianXaHang", StringComparison.OrdinalIgnoreCase) ||
+                           string.Equals(alias, "ThoiGianRungXaHang", StringComparison.OrdinalIgnoreCase);
+                default:
+                    return false;
+            }
+        }
+
         private void RecoverAccumulatorsFromDb(int runId)
         {
             try
@@ -1644,7 +1668,14 @@ namespace HinoTools.Data.Log
                     string value;
                     if (IsStageTimerAlias(item.Alias))
                     {
-                        value = GetAccumulatedValue(item.Alias).ToString(System.Globalization.CultureInfo.InvariantCulture);
+                        if (IsActiveStageTimerForCongDoan(item.Alias, currentCongDoan))
+                        {
+                            value = GetAccumulatedValue(item.Alias).ToString(System.Globalization.CultureInfo.InvariantCulture);
+                        }
+                        else
+                        {
+                            value = "0";
+                        }
                     }
                     else
                     {
