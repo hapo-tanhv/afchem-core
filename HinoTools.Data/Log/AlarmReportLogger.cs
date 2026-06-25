@@ -544,9 +544,12 @@ namespace HinoTools.Data.Log
                                 if (thoiGianCapLieu > 0) hasThoiGianCapLieuStarted = true;
                                 if (hasThoiGianCapLieuStarted && thoiGianCapLieu == 0 && thoiGianTron1 > 0)
                                 {
+                                    InsertAlarmReport();
                                     currentCongDoan = 2;
                                     ResetAccumulatorForAlias("ThoiGianTron1");
                                     InsertRealtimeInfoEvent("T002", "Bắt đầu trộn lần 1");
+                                    InsertAlarmReport();
+                                    lastAlarmReportTime = DateTime.Now;
                                 }
                             }
                             
@@ -555,11 +558,14 @@ namespace HinoTools.Data.Log
                                 if (thoiGianTron1 > 0) hasThoiGianTron1Started = true;
                                 if (hasThoiGianTron1Started && thoiGianTron1 == 0 && (thoiGianXaDay > 0 || thoiGianRungXaDay > 0 || thoiGianHutXa > 0))
                                 {
+                                    InsertAlarmReport();
                                     currentCongDoan = 3;
                                     ResetAccumulatorForAlias("ThoiGianXaDay");
                                     ResetAccumulatorForAlias("ThoiGianRungXaDay");
                                     ResetAccumulatorForAlias("ThoiGianHutXaDay");
                                     InsertRealtimeInfoEvent("T003", "Bắt đầu xả đáy");
+                                    InsertAlarmReport();
+                                    lastAlarmReportTime = DateTime.Now;
                                 }
                             }
 
@@ -577,9 +583,12 @@ namespace HinoTools.Data.Log
                                 if (thoiGianHutXa > 0) hasThoiGianHutXaStarted = true;
                                 if (hasThoiGianHutXaStarted && thoiGianHutXa == 0 && thoiGianTron2 > 0)
                                 {
+                                    InsertAlarmReport();
                                     currentCongDoan = 4;
                                     ResetAccumulatorForAlias("ThoiGianTron2");
                                     InsertRealtimeInfoEvent("T006", "Bắt đầu trộn lần 2");
+                                    InsertAlarmReport();
+                                    lastAlarmReportTime = DateTime.Now;
                                 }
                             }
 
@@ -588,10 +597,13 @@ namespace HinoTools.Data.Log
                                 if (thoiGianTron2 > 0) hasThoiGianTron2Started = true;
                                 if (hasThoiGianTron2Started && thoiGianTron2 == 0 && (thoiGianXaHang > 0 || thoiGianRungXaHang > 0))
                                 {
+                                    InsertAlarmReport();
                                     currentCongDoan = 5;
                                     ResetAccumulatorForAlias("ThoiGianXaHang");
                                     ResetAccumulatorForAlias("ThoiGianRungXaHang");
                                     InsertRealtimeInfoEvent("T007", "Bắt đầu xả hàng");
+                                    InsertAlarmReport();
+                                    lastAlarmReportTime = DateTime.Now;
                                 }
                             }
 
@@ -753,7 +765,16 @@ namespace HinoTools.Data.Log
 
             if (!previousTimerValues.ContainsKey(alias))
             {
-                // First time reading this tag: initialize previous value to currentVal
+                double dbVal = accumulatedTimers[alias];
+                if (currentVal >= dbVal)
+                {
+                    double initialDelta = currentVal - dbVal;
+                    accumulatedTimers[alias] += initialDelta;
+                }
+                else
+                {
+                    accumulatedTimers[alias] += currentVal;
+                }
                 previousTimerValues[alias] = currentVal;
                 return;
             }

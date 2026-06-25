@@ -50,6 +50,16 @@ namespace ConsoleApp
 
                 if (!PreviousTimerValues.ContainsKey(alias))
                 {
+                    double dbVal = AccumulatedTimers[alias];
+                    if (currentVal >= dbVal)
+                    {
+                        double initialDelta = currentVal - dbVal;
+                        AccumulatedTimers[alias] += initialDelta;
+                    }
+                    else
+                    {
+                        AccumulatedTimers[alias] += currentVal;
+                    }
                     PreviousTimerValues[alias] = currentVal;
                     return;
                 }
@@ -100,10 +110,10 @@ namespace ConsoleApp
             }
 
             double result = mock.GetAccumulatedValue(alias);
-            Console.WriteLine($"Monotonic Growth Result: {result}s (Expected: 4s)");
-            if (result != 4)
+            Console.WriteLine($"Monotonic Growth Result: {result}s (Expected: 5s)");
+            if (result != 5)
             {
-                throw new Exception($"Expected 4, but got {result}");
+                throw new Exception($"Expected 5, but got {result}");
             }
         }
 
@@ -134,10 +144,10 @@ namespace ConsoleApp
             }
 
             double result = mock.GetAccumulatedValue(alias);
-            Console.WriteLine($"Register Reset Result: {result}s (Expected: 16s)");
-            if (result != 16)
+            Console.WriteLine($"Register Reset Result: {result}s (Expected: 17s)");
+            if (result != 17)
             {
-                throw new Exception($"Expected 16, but got {result}");
+                throw new Exception($"Expected 17, but got {result}");
             }
         }
 
@@ -168,11 +178,10 @@ namespace ConsoleApp
             mock.PrevValue = 12;
 
             double result = mock.GetAccumulatedValue(alias);
-            Console.WriteLine($"Comms Dropout Result: {result}s (Expected: 2s delta, total elapsed 12s)");
-            // Note: mock started at 10 (accumulator 0), then went 11 (+1), then 11 (+0), then 11 (+0), then 12 (+1) = total 2s
-            if (result != 2)
+            Console.WriteLine($"Comms Dropout Result: {result}s (Expected: 12s)");
+            if (result != 12)
             {
-                throw new Exception($"Expected 2, but got {result}");
+                throw new Exception($"Expected 12, but got {result}");
             }
         }
 
@@ -192,10 +201,10 @@ namespace ConsoleApp
             mock.UpdateAccumulator(alias, 16);
 
             double result = mock.GetAccumulatedValue(alias);
-            Console.WriteLine($"Self-Healing Recovery Result (No PLC Reset): {result}s (Expected: 15s)");
-            if (result != 15)
+            Console.WriteLine($"Self-Healing Recovery Result (No PLC Reset): {result}s (Expected: 16s)");
+            if (result != 16)
             {
-                throw new Exception($"Expected 15, but got {result}");
+                throw new Exception($"Expected 16, but got {result}");
             }
 
             // 4. Recover accumulator again to 14s, but simulate PLC reset occurred during restart (reads 2s)
@@ -205,10 +214,10 @@ namespace ConsoleApp
             mock.UpdateAccumulator(alias, 3); // Second read is 3
 
             result = mock.GetAccumulatedValue(alias);
-            Console.WriteLine($"Self-Healing Recovery Result (With PLC Reset): {result}s (Expected: 15s)");
-            if (result != 15)
+            Console.WriteLine($"Self-Healing Recovery Result (With PLC Reset): {result}s (Expected: 17s)");
+            if (result != 17)
             {
-                throw new Exception($"Expected 15, but got {result}");
+                throw new Exception($"Expected 17, but got {result}");
             }
         }
     }
