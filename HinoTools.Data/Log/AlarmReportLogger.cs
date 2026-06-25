@@ -719,8 +719,6 @@ namespace HinoTools.Data.Log
             prevXaHang = 0;
             prevRungXaHang = 0;
 
-            ResetPreviousTimerValues();
-
             if (lastSetpoints != null)
             {
                 for (int i = 0; i < lastSetpoints.Length; i++)
@@ -728,16 +726,6 @@ namespace HinoTools.Data.Log
                     lastSetpoints[i] = -1;
                 }
             }
-        }
-
-        private void ResetPreviousTimerValues()
-        {
-            var keys = new List<string>(previousTimerValues.Keys);
-            foreach (var key in keys)
-            {
-                previousTimerValues[key] = 0;
-            }
-            System.Diagnostics.Debug.WriteLine("[AlarmReportLogger] Reset previous timer values cache to 0.");
         }
 
         private void ResetAccumulators()
@@ -756,7 +744,7 @@ namespace HinoTools.Data.Log
 
         private void UpdateAccumulator(string alias, double currentVal)
         {
-            if (double.IsNaN(currentVal)) return;
+            if (double.IsNaN(currentVal) || currentVal <= 0) return;
 
             if (!accumulatedTimers.ContainsKey(alias))
             {
@@ -779,11 +767,8 @@ namespace HinoTools.Data.Log
             }
             else
             {
-                // Reset detected: add currentVal if it's > 0
-                if (currentVal > 0)
-                {
-                    accumulatedTimers[alias] += currentVal;
-                }
+                // Reset detected: add currentVal as it is a genuine reset
+                accumulatedTimers[alias] += currentVal;
             }
 
             previousTimerValues[alias] = currentVal;

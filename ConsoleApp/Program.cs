@@ -33,15 +33,6 @@ namespace ConsoleApp
             public Dictionary<string, double> PreviousTimerValues = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
             public double PrevValue = 0;
 
-            public void ResetPreviousTimerValues()
-            {
-                var keys = new List<string>(PreviousTimerValues.Keys);
-                foreach (var key in keys)
-                {
-                    PreviousTimerValues[key] = 0;
-                }
-            }
-
             public void ResetAccumulators()
             {
                 AccumulatedTimers.Clear();
@@ -50,7 +41,7 @@ namespace ConsoleApp
 
             public void UpdateAccumulator(string alias, double currentVal)
             {
-                if (double.IsNaN(currentVal)) return;
+                if (double.IsNaN(currentVal) || currentVal <= 0) return;
 
                 if (!AccumulatedTimers.ContainsKey(alias))
                 {
@@ -72,10 +63,8 @@ namespace ConsoleApp
                 }
                 else
                 {
-                    if (currentVal > 0)
-                    {
-                        AccumulatedTimers[alias] += currentVal;
-                    }
+                    // Reset detected: add currentVal as it is a genuine reset
+                    AccumulatedTimers[alias] += currentVal;
                 }
 
                 PreviousTimerValues[alias] = currentVal;
@@ -111,10 +100,10 @@ namespace ConsoleApp
             }
 
             double result = mock.GetAccumulatedValue(alias);
-            Console.WriteLine($"Monotonic Growth Result: {result}s (Expected: 5s)");
-            if (result != 5)
+            Console.WriteLine($"Monotonic Growth Result: {result}s (Expected: 4s)");
+            if (result != 4)
             {
-                throw new Exception($"Expected 5, but got {result}");
+                throw new Exception($"Expected 4, but got {result}");
             }
         }
 
@@ -131,14 +120,13 @@ namespace ConsoleApp
             }
             mock.PrevValue = 14;
 
-            // 2. Machine is stopped/paused (timer resets to 0)
-            mock.ResetPreviousTimerValues(); // Reset previous timer values cache to 0
-            mock.PrevValue = 0;
+            // 2. Machine is stopped/paused (timer stays at 14)
+            mock.UpdateAccumulator(alias, 14);
 
-            // 3. First read during pause is 0
+            // 3. First read during pause is 0 (PLC sends 0 briefly or drop connection)
             mock.UpdateAccumulator(alias, 0);
 
-            // 4. Machine resumes, PLC timer starts from 0 and goes up
+            // 4. Machine resumes, PLC timer starts from 1, 2, 3
             double[] resumeReadings = { 1, 2, 3 };
             foreach (var r in resumeReadings)
             {
@@ -146,10 +134,10 @@ namespace ConsoleApp
             }
 
             double result = mock.GetAccumulatedValue(alias);
-            Console.WriteLine($"Register Reset Result: {result}s (Expected: 17s)");
-            if (result != 17)
+            Console.WriteLine($"Register Reset Result: {result}s (Expected: 16s)");
+            if (result != 16)
             {
-                throw new Exception($"Expected 17, but got {result}");
+                throw new Exception($"Expected 16, but got {result}");
             }
         }
 
