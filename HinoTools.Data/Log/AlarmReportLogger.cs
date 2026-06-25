@@ -1709,7 +1709,7 @@ namespace HinoTools.Data.Log
                     $"'=', " +
                     $"'Tạm dừng máy', " +
                     $"{currentQuyTrinh}, " +
-                    $"'Tạm dừng', " +
+                    $"'{CurrentCongDoanCode}', " +
                     $"{batchIdValue}, " +
                     $"{runIdValue}, " +
                     $"'INFO', " +
