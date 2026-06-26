@@ -90,7 +90,8 @@ namespace WindowsFormsApp1
         "AFChemTX01.DoAmMoiTruong;DoAmMoiTruong",
         "AFChemTX01.NhietDoBonTronTren;NhietDoBonTronTren",
         "AFChemTX01.NhietDoBonTronGiua;NhietDoBonTronGiua",
-        "AFChemTX01.NhietDoBonTronDuoi;NhietDoBonTronDuoi"};
+        "AFChemTX01.NhietDoBonTronDuoi;NhietDoBonTronDuoi",
+        "AFChemTX01.MayLoi;MayLoi"};
             this.alarmReportLogger1.DatabaseName = "scada";
             this.alarmReportLogger1.Driver = this.iDriver1;
             this.alarmReportLogger1.HttpPort = 5500;
@@ -109,6 +110,7 @@ namespace WindowsFormsApp1
             this.realtimeThresholdLogger1.Collection = new string[] {
         "AFChemTX01.NhietDoMoiTruong;NhietDoMoiTruong;45;>;WARNING;Nhiệt độ môi trường vượ" +
             "t ngưỡng cảnh báo",
+        "AFChemTX01.ApSuat;ApSuat;2;<;WARNING;Áp suất hệ thống quá thấp",
         "AFChemTX01.ApSuat;ApSuat;3;<;ALARM;Áp suất hệ thống quá thấp",
         "AFChemTX01.NhietDoBonTronGiua;NhietDoBonTronGiua;40;>;WARNING;Nhiệt độ bồn trộn g" +
             "iữa vượt ngưỡng cảnh báo",
@@ -117,7 +119,12 @@ namespace WindowsFormsApp1
         "AFChemTX01.NhietDoBonTronDuoi;NhietDoBonTronDuoi;40;>;ALARM;Nhiệt độ bồn trộn dướ" +
             "i quá cao",
         "AFChemTX01.NhietDoBonTronTren;NhietDoBonTronTren;40;>;ALARM;Nhiệt độ bồn trộn trê" +
-            "n quá cao"};
+            "n quá cao",
+        "AFChemTX01.MayLoi;1;=;WARNING;Dừng khẩn cấp",
+        "AFChemTX01.MayLoi;2;=;WARNING;Lỗi nguồn động cơ trộn",
+        "AFChemTX01.MayLoi;3;=;WARNING;Lỗi nguồn động cơ hút",
+        "AFChemTX01.MayLoi;4;=;WARNING;Bể xả cân bằng đã đầy",
+        "AFChemTX01.MayLoi;5;=;WARNING;Áp suất khí không đủ"};
             this.realtimeThresholdLogger1.DatabaseName = "scada";
             this.realtimeThresholdLogger1.Driver = this.iDriver1;
             this.realtimeThresholdLogger1.Password = "101101";

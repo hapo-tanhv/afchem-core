@@ -178,21 +178,51 @@ namespace HinoTools.Data.Log
                 var parts = item.Split(';');
                 if (parts.Length < 3) continue; // Minimum: TagName;Alias;Threshold
 
-                double threshold;
-                if (!double.TryParse(parts[2], out threshold)) continue;
+                string tagName = parts[0];
+                string alias = "";
+                double threshold = 0;
+                string op = ">";
+                string severity = "ALARM";
+                string eventMessage = "";
 
-                var op = parts.Length >= 4 ? parts[3].Trim() : ">";
-                if (op != ">" && op != "<" && op != "=")
-                    op = ">"; // Fallback to default
+                bool isFivePartsFormat = false;
+                if (parts.Length == 5)
+                {
+                    // Check if parts[1] is a double and parts[2] is a operator (=, >, <)
+                    double tempThreshold;
+                    if (double.TryParse(parts[1], out tempThreshold))
+                    {
+                        string tempOp = parts[2].Trim();
+                        if (tempOp == "=" || tempOp == ">" || tempOp == "<")
+                        {
+                            isFivePartsFormat = true;
+                            threshold = tempThreshold;
+                            op = tempOp;
+                            alias = tagName + "_" + parts[1]; // Ensure unique alias e.g. AFChemTX01.MayLoi_1
+                            severity = parts[3].Trim();
+                            eventMessage = parts[4].Trim();
+                        }
+                    }
+                }
 
-                var severity = parts.Length >= 5 ? parts[4].Trim() : "ALARM";
-                var eventMessage = parts.Length >= 6 ? parts[5].Trim() : "";
+                if (!isFivePartsFormat)
+                {
+                    alias = parts[1];
+                    if (!double.TryParse(parts[2], out threshold)) continue;
+
+                    op = parts.Length >= 4 ? parts[3].Trim() : ">";
+                    if (op != ">" && op != "<" && op != "=")
+                        op = ">"; // Fallback to default
+
+                    severity = parts.Length >= 5 ? parts[4].Trim() : "ALARM";
+                    eventMessage = parts.Length >= 6 ? parts[5].Trim() : "";
+                }
 
                 yield return new ThresholdItem()
                 {
-                    TagName = parts[0],
-                    Tag = this.driver?.GetTagByName(parts[0]),
-                    Alias = parts[1],
+                    TagName = tagName,
+                    Tag = this.driver?.GetTagByName(tagName),
+                    Alias = alias,
                     Threshold = threshold,
                     Operator = op,
                     Severity = severity,

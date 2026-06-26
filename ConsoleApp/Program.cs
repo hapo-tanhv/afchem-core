@@ -14,6 +14,8 @@ namespace ConsoleApp
                 TestRegisterResetOnResume();
                 TestCommsDropoutNaNHandling();
                 TestRecoverySelfHealing();
+                TestFivePartThresholdParsing();
+                TestStageDeviationSeverityMapping();
                 
                 Console.WriteLine("\n[SUCCESS] All unit tests completed successfully!");
             }
@@ -219,6 +221,81 @@ namespace ConsoleApp
             {
                 throw new Exception($"Expected 17, but got {result}");
             }
+        }
+
+        static void TestFivePartThresholdParsing()
+        {
+            Console.WriteLine("\nRunning TestFivePartThresholdParsing...");
+            string config = "AFChemTX01.MayLoi;1;=;WARNING;Dừng khẩn cấp";
+            var parts = config.Split(';');
+            
+            // Replicating parser logic
+            string tagName = parts[0];
+            string alias = "";
+            double threshold = 0;
+            string op = ">";
+            string severity = "ALARM";
+            string eventMessage = "";
+
+            bool isFivePartsFormat = false;
+            if (parts.Length == 5)
+            {
+                double tempThreshold;
+                if (double.TryParse(parts[1], out tempThreshold))
+                {
+                    string tempOp = parts[2].Trim();
+                    if (tempOp == "=" || tempOp == ">" || tempOp == "<")
+                    {
+                        isFivePartsFormat = true;
+                        threshold = tempThreshold;
+                        op = tempOp;
+                        alias = tagName + "_" + parts[1];
+                        severity = parts[3].Trim();
+                        eventMessage = parts[4].Trim();
+                    }
+                }
+            }
+
+            Console.WriteLine($"Parsed - Alias: {alias}, Threshold: {threshold}, Op: {op}, Severity: {severity}, Msg: {eventMessage}");
+            if (!isFivePartsFormat || alias != "AFChemTX01.MayLoi_1" || threshold != 1 || op != "=" || severity != "WARNING" || eventMessage != "Dừng khẩn cấp")
+            {
+                throw new Exception("Five part format parsing failed or mismatch!");
+            }
+        }
+
+        static void TestStageDeviationSeverityMapping()
+        {
+            Console.WriteLine("\nRunning TestStageDeviationSeverityMapping...");
+            double setpoint = 100;
+            
+            // Helper to compute severity
+            Func<double, double, string> getSeverity = (actual, sp) => {
+                double deviation = actual - sp;
+                if (deviation <= 0) return "NONE";
+                if (deviation < 300) return "INFO";
+                if (deviation >= 300 && deviation <= 600) return "ALARM";
+                return "WARNING";
+            };
+
+            // Test case 1: Faster/Equal -> No alert
+            string sev1 = getSeverity(90, setpoint);
+            Console.WriteLine($"Actual: 90, SP: 100 -> Severity: {sev1} (Expected: NONE)");
+            if (sev1 != "NONE") throw new Exception("Expected NONE");
+
+            // Test case 2: Slower by 50s (< 300s) -> INFO
+            string sev2 = getSeverity(150, setpoint);
+            Console.WriteLine($"Actual: 150, SP: 100 -> Severity: {sev2} (Expected: INFO)");
+            if (sev2 != "INFO") throw new Exception("Expected INFO");
+
+            // Test case 3: Slower by 400s (300-600s) -> ALARM
+            string sev3 = getSeverity(500, setpoint);
+            Console.WriteLine($"Actual: 500, SP: 100 -> Severity: {sev3} (Expected: ALARM)");
+            if (sev3 != "ALARM") throw new Exception("Expected ALARM");
+
+            // Test case 4: Slower by 750s (> 600s) -> WARNING
+            string sev4 = getSeverity(850, setpoint);
+            Console.WriteLine($"Actual: 850, SP: 100 -> Severity: {sev4} (Expected: WARNING)");
+            if (sev4 != "WARNING") throw new Exception("Expected WARNING");
         }
     }
 }

@@ -1997,25 +1997,38 @@ namespace HinoTools.Data.Log
                 if (spObj == null || spObj == DBNull.Value) return;
                 double setpoint = Convert.ToDouble(spObj);
 
-                // 2. Get Threshold and full TagName from alarmsettings table
-                string getSettingQuery = string.Format("SELECT `TagName`, `Value` FROM `alarmsettings` WHERE `TagNo` = '{0}' AND `TagName` LIKE '%{1}%' LIMIT 1", tagNo, deviceName);
+                // 2. Get full TagName from alarmsettings table or dynamically construct it
+                string alarmTagName = "";
+                string getSettingQuery = string.Format("SELECT `TagName` FROM `alarmsettings` WHERE `TagNo` = '{0}' AND `TagName` LIKE '%{1}%' LIMIT 1", tagNo, deviceName);
                 var dtSetting = dataAccess.ExecuteQuery(getSettingQuery);
-                if (dtSetting == null || dtSetting.Rows.Count == 0) return;
-
-                string alarmTagName = dtSetting.Rows[0]["TagName"].ToString();
-                string thresholdStr = dtSetting.Rows[0]["Value"].ToString();
-                double threshold = 0;
-                double.TryParse(thresholdStr, out threshold);
-
-                // 3. Compare: |Actual - Setpoint| > Threshold
-                double diff = Math.Abs(actualDuration - setpoint);
-                if (diff > threshold)
+                if (dtSetting != null && dtSetting.Rows.Count > 0)
                 {
-                    string stageDisplayName = GetStageDisplayName(tagNo);
-                    string message = string.Format("[Cảnh báo] Giai đoạn {0} có thời gian thực tế ({1}s) chênh lệch vượt ngưỡng cho phép ({2}s) so với cài đặt ({3}s).",
-                        stageDisplayName, actualDuration, threshold, setpoint);
+                    alarmTagName = dtSetting.Rows[0]["TagName"].ToString();
+                }
+                else
+                {
+                    string aliasName = GetStageAliasName(tagNo);
+                    alarmTagName = string.IsNullOrEmpty(aliasName) ? tagNo : string.Format("{0}.{1}", deviceName, aliasName);
+                }
 
-                    InsertRealtimeStageAlarm(alarmTagName, actualDuration, threshold, message, tagNo);
+                // 3. Compare: actualDuration - setpoint > 0 (slower than setpoint)
+                double deviation = actualDuration - setpoint;
+                if (deviation > 0)
+                {
+                    string severity = "INFO";
+                    if (deviation >= 300 && deviation <= 600)
+                    {
+                        severity = "ALARM";
+                    }
+                    else if (deviation > 600)
+                    {
+                        severity = "WARNING";
+                    }
+
+                    string stageDisplayName = GetStageDisplayName(tagNo);
+                    string message = string.Format("Thời gian {0} lệch {1}s so với cài đặt.", stageDisplayName, (int)Math.Round(deviation));
+
+                    InsertRealtimeStageAlarm(alarmTagName, actualDuration, setpoint, message, tagNo, severity);
                 }
             }
             catch (Exception ex)
@@ -2040,6 +2053,22 @@ namespace HinoTools.Data.Log
             }
         }
 
+        private string GetStageAliasName(string tagNo)
+        {
+            switch (tagNo)
+            {
+                case "T001": return "ThoiGianCapLieu";
+                case "T002": return "ThoiGianTron1";
+                case "T003": return "ThoiGianXaDay";
+                case "T004": return "ThoiGianRungXaDay";
+                case "T005": return "ThoiGianHutXaDay";
+                case "T006": return "ThoiGianTron2";
+                case "T007": return "ThoiGianXaHang";
+                case "T008": return "ThoiGianRungXaHang";
+                default: return null;
+            }
+        }
+
         private string GetStageDisplayName(string tagNo)
         {
             switch (tagNo)
@@ -2056,7 +2085,7 @@ namespace HinoTools.Data.Log
             }
         }
 
-        private bool InsertRealtimeStageAlarm(string tagName, double value, double threshold, string message, string tagNo)
+        private bool InsertRealtimeStageAlarm(string tagName, double value, double threshold, string message, string tagNo, string severity)
         {
             try
             {
@@ -2072,7 +2101,7 @@ namespace HinoTools.Data.Log
                 if (activeRunId.HasValue)
                 {
                     string checkDupQuery = string.Format(
-                        "SELECT COUNT(*) FROM `{0}` WHERE `runId` = {1} AND `TagName` = '{2}' AND `Severity` = 'INFO'",
+                        "SELECT COUNT(*) FROM `{0}` WHERE `runId` = {1} AND `TagName` = '{2}'",
                         tblName, activeRunId.Value, tagName);
                     var dupObj = dataAccess.ExecuteScalarQuery(checkDupQuery);
                     if (dupObj != null && dupObj != DBNull.Value && Convert.ToInt32(dupObj) > 0)
@@ -2084,8 +2113,8 @@ namespace HinoTools.Data.Log
 
                 var query = string.Format(
                     "INSERT INTO `{0}` (`DateTime`, `DeviceName`, `TagName`, `Value`, `Threshold`, `Operator`, `Message`, `QuyTrinh`, `CongDoan`, `batchId`, `runId`, `Severity`, `restore_time`) " +
-                    "VALUES ('{1:yyyy-MM-dd HH:mm:ss}', '{2}', '{3}', {4}, {5}, '>', '{6}', {7}, '{8}', {9}, {10}, 'INFO', '{1:yyyy-MM-dd HH:mm:ss}')",
-                    tblName, DateTime.Now, deviceName, tagName, value, threshold, message, currentQuyTrinh, tagNo, batchIdValue, runIdValue);
+                    "VALUES ('{1:yyyy-MM-dd HH:mm:ss}', '{2}', '{3}', {4}, {5}, '>', '{6}', {7}, '{8}', {9}, {10}, '{11}', '{1:yyyy-MM-dd HH:mm:ss}')",
+                    tblName, DateTime.Now, deviceName, tagName, value, threshold, message, currentQuyTrinh, tagNo, batchIdValue, runIdValue, severity);
 
                 return dataAccess.ExecuteNonQuery(query) >= 0;
             }
