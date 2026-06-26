@@ -1655,7 +1655,56 @@ namespace HinoTools.Data.Log
 
                 sb.Append(")");
 
-                return dataAccess.ExecuteNonQuery(sb.ToString()) >= 0;
+                bool success = dataAccess.ExecuteNonQuery(sb.ToString()) >= 0;
+                if (!success) return false;
+
+                // Self-healing migration: check and add missing columns for all Collection items
+                foreach (var item in logItems)
+                {
+                    if (string.Equals(item.Alias, "CongDoanMay", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(item.Alias, "QuyTrinh", StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    try
+                    {
+                        string checkColSql = $"SHOW COLUMNS FROM `{TableName}` LIKE '{item.Alias}'";
+                        var colRes = dataAccess.ExecuteScalarQuery(checkColSql);
+                        if (colRes == null || colRes == DBNull.Value)
+                        {
+                            string alterSql = $"ALTER TABLE `{TableName}` ADD COLUMN `{item.Alias}` VARCHAR(200) NOT NULL DEFAULT '0'";
+                            dataAccess.ExecuteNonQuery(alterSql);
+                            System.Diagnostics.Debug.WriteLine($"[Migration] Added missing column {item.Alias} to {TableName} table successfully.");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[Migration] ERROR adding column {item.Alias} to {TableName}: {ex.Message}");
+                    }
+                }
+
+                // Also check and ensure batchId and runId columns exist (since older tables might not have them)
+                string[] extraCols = { "batchId", "runId" };
+                string[] extraSqls = {
+                    $"ALTER TABLE `{TableName}` ADD COLUMN `batchId` INT NULL DEFAULT NULL",
+                    $"ALTER TABLE `{TableName}` ADD COLUMN `runId` INT NULL DEFAULT NULL AFTER `batchId`"
+                };
+
+                for (int i = 0; i < extraCols.Length; i++)
+                {
+                    try
+                    {
+                        string checkColSql = $"SHOW COLUMNS FROM `{TableName}` LIKE '{extraCols[i]}'";
+                        var colRes = dataAccess.ExecuteScalarQuery(checkColSql);
+                        if (colRes == null || colRes == DBNull.Value)
+                        {
+                            dataAccess.ExecuteNonQuery(extraSqls[i]);
+                            System.Diagnostics.Debug.WriteLine($"[Migration] Added missing column {extraCols[i]} to {TableName} table successfully.");
+                        }
+                    }
+                    catch { }
+                }
+
+                return true;
             }
             catch (Exception ex) 
             { 
