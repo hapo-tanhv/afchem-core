@@ -1,4 +1,4 @@
-using ATSCADA;
+﻿using ATSCADA;
 using ATSCADA.ToolExtensions.ExtensionMethods;
 using HinoTools.Data.Database;
 using System;

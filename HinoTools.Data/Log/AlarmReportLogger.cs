@@ -1,4 +1,4 @@
-using ATSCADA;
+﻿using ATSCADA;
 using ATSCADA.ToolExtensions.ExtensionMethods;
 using HinoTools.Data.Database;
 using System;
@@ -2096,10 +2096,10 @@ namespace HinoTools.Data.Log
                     alarmTagName = string.IsNullOrEmpty(aliasName) ? tagNo : string.Format("{0}.{1}", deviceName, aliasName);
                 }
 
-                // 3. Compare: absolute deviation > 0
-                double deviation = Math.Abs(actualDuration - setpoint);
-                if (deviation > 0)
+                // 3. Compare: value (actualDuration) > threshold (setpoint)
+                if (actualDuration > setpoint)
                 {
+                    double deviation = actualDuration - setpoint;
                     string severity = "LOW";
                     if (deviation >= 300 && deviation <= 600)
                     {
