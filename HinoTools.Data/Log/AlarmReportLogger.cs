@@ -56,10 +56,43 @@ namespace HinoTools.Data.Log
         private List<LogItem> logItems;
 
         // Batches and API fields
-        private HinoTools.Data.Http.BatchesHttpServer httpServer;
+        private HinoTools.Data.Http.BatchesHttpServer httpServer = null;
         private HinoTools.Data.Http.WebhookHttpServer webhookServer;
-        private int? activeBatchId = null;
-        private int? activeRunId = null;
+        private int? _activeBatchId = null;
+        private int? _activeRunId = null;
+        private int? lastActiveBatchId = null;
+        private int? lastActiveRunId = null;
+        private DateTime lastActiveRunEndTime = DateTime.MinValue;
+
+        private int? activeBatchId
+        {
+            get => _activeBatchId;
+            set
+            {
+                _activeBatchId = value;
+                if (value.HasValue)
+                {
+                    lastActiveBatchId = value;
+                }
+            }
+        }
+
+        private int? activeRunId
+        {
+            get => _activeRunId;
+            set
+            {
+                if (_activeRunId.HasValue && !value.HasValue)
+                {
+                    lastActiveRunEndTime = DateTime.Now;
+                }
+                _activeRunId = value;
+                if (value.HasValue)
+                {
+                    lastActiveRunId = value;
+                }
+            }
+        }
 
         private DateTime lastAlarmReportTime = DateTime.MinValue;
         private double[] lastSetpoints = new double[8] { -1, -1, -1, -1, -1, -1, -1, -1 };
@@ -76,6 +109,9 @@ namespace HinoTools.Data.Log
         public int CurrentQuyTrinh => currentQuyTrinh;
         public int? ActiveBatchId => activeBatchId;
         public int? ActiveRunId => activeRunId;
+        public int? LastActiveBatchId => lastActiveBatchId;
+        public int? LastActiveRunId => lastActiveRunId;
+        public DateTime LastActiveRunEndTime => lastActiveRunEndTime;
 
         public string CurrentCongDoanName
         {

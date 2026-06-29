@@ -607,9 +607,18 @@ namespace HinoTools.Data.Log
                     {
                         batchIdValue = AlarmReportLogger.ActiveBatchId.Value.ToString();
                     }
+                    else if (AlarmReportLogger.LastActiveBatchId.HasValue && (DateTime.Now - AlarmReportLogger.LastActiveRunEndTime).TotalSeconds <= 10)
+                    {
+                        batchIdValue = AlarmReportLogger.LastActiveBatchId.Value.ToString();
+                    }
+
                     if (AlarmReportLogger.ActiveRunId.HasValue)
                     {
                         runIdValue = AlarmReportLogger.ActiveRunId.Value.ToString();
+                    }
+                    else if (AlarmReportLogger.LastActiveRunId.HasValue && (DateTime.Now - AlarmReportLogger.LastActiveRunEndTime).TotalSeconds <= 10)
+                    {
+                        runIdValue = AlarmReportLogger.LastActiveRunId.Value.ToString();
                     }
                 }
 
