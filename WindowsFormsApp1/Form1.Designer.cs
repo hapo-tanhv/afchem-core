@@ -108,10 +108,10 @@ namespace WindowsFormsApp1
             // 
             this.realtimeThresholdLogger1.AlarmReportLogger = this.alarmReportLogger1;
             this.realtimeThresholdLogger1.Collection = new string[] {
-        "AFChemTX01.NhietDoMoiTruong;NhietDoMoiTruong;DatNguongNhietDoMoiTruong:37;>;AVERA" +
-            "GE;Nhiệt độ môi trường vượt ngưỡng cảnh báo",
-        "AFChemTX01.DoAmMoiTruong;DoAmMoiTruong;DatNguongDoAmMoiTruong:75;>;AVERAGE;Độ ẩm " +
-            "môi trường vượt ngưỡng cảnh báo",
+        "AFChemTX01.NhietDoMoiTruong;NhietDoMoiTruong;DatNguongNhietDoMoiTruong:37;>;HIGH;" +
+            "Nhiệt độ môi trường vượt ngưỡng cảnh báo",
+        "AFChemTX01.DoAmMoiTruong;DoAmMoiTruong;DatNguongDoAmMoiTruong:75;>;HIGH;Độ ẩm môi" +
+            " trường vượt ngưỡng cảnh báo",
         "AFChemTX01.ApSuat;2;<;HIGH;Áp suất hệ thống quá thấp",
         "AFChemTX01.ApSuat;3;<;AVERAGE;Áp suất hệ thống quá thấp",
         "AFChemTX01.NhietDoBonTronGiua;NhietDoBonTronGiua;40;>;HIGH;Nhiệt độ bồn trộn giữa" +
