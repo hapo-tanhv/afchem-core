@@ -1,0 +1,33 @@
+* Setup chạy tự động file chạy domain https://hinotools-alarm.loca.lt
+- B1: Tạo file tunnel.js
+- B2: Tạo file start-localtunnel.bat với nội dung
+@echo off
+cd /d D:\project\afchem-core
+
+set PATH=%PATH%;C:\Program Files\nodejs
+
+node tunnel.js
+- B3: Mở Task Scheduler
++ Win + R
++ Gõ taskschd.msc
+- B4: Tạo Task mới
++ Task Scheduler Library
+    -> Create Task...
++ General
+. Name: LocalTunnel KeepAlive
+. Tick:
+☑ Run whether user is logged on or not
+☑ Run with highest privileges
++ Trigger:
+. Begin the task:
+. At startup
++ Action:
+. Program/script: Chọn D:\Projects\afchem-core\start-localtunnel.bat
++ Conditions: 
+. Bỏ tick ☑ Start the task only if computer is on AC power
++ Settings:
+. Tick:
+☑ Allow task to be run on demand
+☑ If the task fails, restart every 1 minute, 999 times
+- B5: Test
++ Mở CMD và chạy lệnh schtasks /run /tn "LocalTunnel KeepAlive"
