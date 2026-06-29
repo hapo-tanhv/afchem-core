@@ -1,4 +1,4 @@
-﻿using ATSCADA.ToolExtensions.ExtensionMethods;
+using ATSCADA.ToolExtensions.ExtensionMethods;
 using HinoTools.Alarm.Model;
 using System;
 using System.Collections.Generic;
@@ -245,6 +245,11 @@ namespace HinoTools.Alarm.Control
                                     listViewItem.BackColor = Color.Red;
                                     listViewItem.ForeColor = Color.Black;
                                 }
+                                else if (alarmItem.Param.Level == AlarmLevel.Average)
+                                {
+                                    listViewItem.BackColor = Color.Orange;
+                                    listViewItem.ForeColor = Color.Black;
+                                }
                                 else
                                 {
                                     listViewItem.BackColor = Color.Yellow;
@@ -301,7 +306,8 @@ namespace HinoTools.Alarm.Control
                 "- - -" : alarmItem.RestoreTime.ToString(FormatDateTime);
             var status = alarmItem.Status == AlarmStatus.ALARM ? "Alarm" : "Resolved";
             var backColor = alarmItem.Status == AlarmStatus.NORMAL ? Color.LimeGreen :
-                alarmItem.Param.Level == AlarmLevel.High ? Color.Red : Color.Yellow;
+                alarmItem.Param.Level == AlarmLevel.High ? Color.Red :
+                alarmItem.Param.Level == AlarmLevel.Average ? Color.Orange : Color.Yellow;
             var foreColor = Color.Black;
             return new ListViewItem(new string[8]
             {
@@ -349,6 +355,11 @@ namespace HinoTools.Alarm.Control
                             listViewItem.BackColor = Color.Black;
                             listViewItem.ForeColor = Color.Red;
                         }
+                        else if (alarmItem.Param.Level == AlarmLevel.Average)
+                        {
+                            listViewItem.BackColor = Color.Black;
+                            listViewItem.ForeColor = Color.Orange;
+                        }
                         else
                         {
                             listViewItem.BackColor = Color.Black;
@@ -372,6 +383,11 @@ namespace HinoTools.Alarm.Control
                         if (alarmItem.Param.Level == AlarmLevel.High)
                         {
                             listViewItem.BackColor = Color.Red;
+                            listViewItem.ForeColor = Color.Black;
+                        }
+                        else if (alarmItem.Param.Level == AlarmLevel.Average)
+                        {
+                            listViewItem.BackColor = Color.Orange;
                             listViewItem.ForeColor = Color.Black;
                         }
                         else

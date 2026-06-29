@@ -79,8 +79,8 @@ namespace TestData
             // 
             this.realtimeThresholdLogger1.AlarmReportLogger = this.alarmReportLogger1;
             this.realtimeThresholdLogger1.Collection = new string[] {
-        "AFChemTX01.NhietDoMay;NhietDoMay;50;>;ALARM;Nhiệt độ máy vượt ngưỡng nguy hiểm",
-        "AFChemTX01.ApSuat;ApSuat;10;<;WARNING;Áp suất hệ thống thấp hơn mức an toàn"};
+        "AFChemTX01.NhietDoMay;NhietDoMay;50;>;HIGH;Nhiệt độ máy vượt ngưỡng nguy hiểm",
+        "AFChemTX01.ApSuat;ApSuat;10;<;AVERAGE;Áp suất hệ thống thấp hơn mức an toàn"};
             this.realtimeThresholdLogger1.DatabaseName = "scada";
             this.realtimeThresholdLogger1.Driver = this.iDriver1;
             this.realtimeThresholdLogger1.Password = "101101";

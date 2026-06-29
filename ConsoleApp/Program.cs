@@ -226,7 +226,7 @@ namespace ConsoleApp
         static void TestFivePartThresholdParsing()
         {
             Console.WriteLine("\nRunning TestFivePartThresholdParsing...");
-            string config = "AFChemTX01.MayLoi;1;=;WARNING;Dừng khẩn cấp";
+            string config = "AFChemTX01.MayLoi;1;=;HIGH;Dừng khẩn cấp";
             var parts = config.Split(';');
             
             // Replicating parser logic
@@ -257,7 +257,7 @@ namespace ConsoleApp
             }
 
             Console.WriteLine($"Parsed - Alias: {alias}, Threshold: {threshold}, Op: {op}, Severity: {severity}, Msg: {eventMessage}");
-            if (!isFivePartsFormat || alias != "AFChemTX01.MayLoi_1" || threshold != 1 || op != "=" || severity != "WARNING" || eventMessage != "Dừng khẩn cấp")
+            if (!isFivePartsFormat || alias != "AFChemTX01.MayLoi_1" || threshold != 1 || op != "=" || severity != "HIGH" || eventMessage != "Dừng khẩn cấp")
             {
                 throw new Exception("Five part format parsing failed or mismatch!");
             }
@@ -268,34 +268,39 @@ namespace ConsoleApp
             Console.WriteLine("\nRunning TestStageDeviationSeverityMapping...");
             double setpoint = 100;
             
-            // Helper to compute severity
+            // Helper to compute severity using absolute deviation
             Func<double, double, string> getSeverity = (actual, sp) => {
-                double deviation = actual - sp;
+                double deviation = Math.Abs(actual - sp);
                 if (deviation <= 0) return "NONE";
-                if (deviation < 300) return "INFO";
-                if (deviation >= 300 && deviation <= 600) return "ALARM";
-                return "WARNING";
+                if (deviation < 300) return "LOW";
+                if (deviation >= 300 && deviation <= 600) return "AVERAGE";
+                return "HIGH";
             };
 
-            // Test case 1: Faster/Equal -> No alert
-            string sev1 = getSeverity(90, setpoint);
-            Console.WriteLine($"Actual: 90, SP: 100 -> Severity: {sev1} (Expected: NONE)");
+            // Test case 1: Equal -> No alert
+            string sev1 = getSeverity(100, setpoint);
+            Console.WriteLine($"Actual: 100, SP: 100 -> Severity: {sev1} (Expected: NONE)");
             if (sev1 != "NONE") throw new Exception("Expected NONE");
 
-            // Test case 2: Slower by 50s (< 300s) -> INFO
-            string sev2 = getSeverity(150, setpoint);
-            Console.WriteLine($"Actual: 150, SP: 100 -> Severity: {sev2} (Expected: INFO)");
-            if (sev2 != "INFO") throw new Exception("Expected INFO");
+            // Test case 2: Faster by 10s (Deviation 10s < 300s) -> LOW
+            string sev2a = getSeverity(90, setpoint);
+            Console.WriteLine($"Actual: 90, SP: 100 -> Severity: {sev2a} (Expected: LOW)");
+            if (sev2a != "LOW") throw new Exception("Expected LOW");
 
-            // Test case 3: Slower by 400s (300-600s) -> ALARM
+            // Test case 3: Slower by 50s (Deviation 50s < 300s) -> LOW
+            string sev2b = getSeverity(150, setpoint);
+            Console.WriteLine($"Actual: 150, SP: 100 -> Severity: {sev2b} (Expected: LOW)");
+            if (sev2b != "LOW") throw new Exception("Expected LOW");
+
+            // Test case 4: Slower by 400s (300-600s) -> AVERAGE
             string sev3 = getSeverity(500, setpoint);
-            Console.WriteLine($"Actual: 500, SP: 100 -> Severity: {sev3} (Expected: ALARM)");
-            if (sev3 != "ALARM") throw new Exception("Expected ALARM");
+            Console.WriteLine($"Actual: 500, SP: 100 -> Severity: {sev3} (Expected: AVERAGE)");
+            if (sev3 != "AVERAGE") throw new Exception("Expected AVERAGE");
 
-            // Test case 4: Slower by 750s (> 600s) -> WARNING
+            // Test case 5: Slower by 750s (> 600s) -> HIGH
             string sev4 = getSeverity(850, setpoint);
-            Console.WriteLine($"Actual: 850, SP: 100 -> Severity: {sev4} (Expected: WARNING)");
-            if (sev4 != "WARNING") throw new Exception("Expected WARNING");
+            Console.WriteLine($"Actual: 850, SP: 100 -> Severity: {sev4} (Expected: HIGH)");
+            if (sev4 != "HIGH") throw new Exception("Expected HIGH");
         }
     }
 }

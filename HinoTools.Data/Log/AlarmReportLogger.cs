@@ -2060,18 +2060,18 @@ namespace HinoTools.Data.Log
                     alarmTagName = string.IsNullOrEmpty(aliasName) ? tagNo : string.Format("{0}.{1}", deviceName, aliasName);
                 }
 
-                // 3. Compare: actualDuration - setpoint > 0 (slower than setpoint)
-                double deviation = actualDuration - setpoint;
+                // 3. Compare: absolute deviation > 0
+                double deviation = Math.Abs(actualDuration - setpoint);
                 if (deviation > 0)
                 {
-                    string severity = "INFO";
+                    string severity = "LOW";
                     if (deviation >= 300 && deviation <= 600)
                     {
-                        severity = "ALARM";
+                        severity = "AVERAGE";
                     }
                     else if (deviation > 600)
                     {
-                        severity = "WARNING";
+                        severity = "HIGH";
                     }
 
                     string stageDisplayName = GetStageDisplayName(tagNo);

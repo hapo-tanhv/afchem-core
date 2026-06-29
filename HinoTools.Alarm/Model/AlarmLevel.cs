@@ -1,8 +1,9 @@
-﻿namespace HinoTools.Alarm.Model
+namespace HinoTools.Alarm.Model
 {
     public enum AlarmLevel
     {
-        Low,
-        High
+        Low = 0,
+        Average = 1,
+        High = 2
     }
 }

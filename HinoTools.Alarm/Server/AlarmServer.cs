@@ -102,6 +102,15 @@ namespace HinoTools.Alarm.Server
             this.dataAccess.ConnectionString =
                 $"Server={ServerName};Database={DatabaseName};Uid={UserID};Pwd={Password};";
 
+            try
+            {
+                this.dataAccess.ExecuteNonQuery($"UPDATE `{TableName}` SET `Level` = 2 WHERE `Level` = 1");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[AlarmServer] Migration of alarmsettings Level from 1 to 2 failed: {ex.Message}");
+            }
+
             var alarmParams = LoadAlarmParams();
             LoadAlarmItems(alarmParams);
             InitAlarmCondition(alarmParams);

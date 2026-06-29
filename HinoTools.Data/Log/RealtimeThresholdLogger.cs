@@ -248,6 +248,19 @@ namespace HinoTools.Data.Log
 
         #region SCANNING & THRESHOLD LOGIC
 
+        private int GetSeverityRank(string severity)
+        {
+            if (string.IsNullOrEmpty(severity)) return 0;
+            switch (severity.ToUpperInvariant())
+            {
+                case "INFO": return 1;
+                case "LOW": return 2;
+                case "AVERAGE": return 3;
+                case "HIGH": return 4;
+                default: return 0;
+            }
+        }
+
         /// <summary>
         /// Core scan method called every 3 seconds.
         /// Reads all configured tags and checks thresholds.
@@ -258,6 +271,48 @@ namespace HinoTools.Data.Log
             {
                 tmrScan.Stop();
 
+                // 1. First pass: Determine the highest violating severity rank for each TagName
+                var highestViolatingRankByTag = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+                foreach (var item in thresholdItems)
+                {
+                    if (!item.IsActive) continue;
+                    if (item.Tag == null && driver != null)
+                    {
+                        item.Tag = driver.GetTagByName(item.TagName);
+                    }
+
+                    if (item.Tag?.Value == null) continue;
+                    double currentValue;
+                    if (!double.TryParse(item.Tag.Value, out currentValue)) continue;
+
+                    if (string.Equals(item.Alias, "CaiDatApSuat", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(item.Alias, "ApSuat", StringComparison.OrdinalIgnoreCase))
+                    {
+                        currentValue = Math.Round(currentValue / 100.0, 2);
+                    }
+                    else if (string.Equals(item.Alias, "DatNguongNhietDoMoiTruong", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(item.Alias, "DatNguongDoAmMoiTruong", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(item.Alias, "NhietDoMoiTruong", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(item.Alias, "DoAmMoiTruong", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(item.Alias, "NhietDoBonTronTren", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(item.Alias, "NhietDoBonTronGiua", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(item.Alias, "NhietDoBonTronDuoi", StringComparison.OrdinalIgnoreCase))
+                    {
+                        currentValue = Math.Round(currentValue / 10.0, 2);
+                    }
+
+                    if (EvaluateThreshold(currentValue, item.Operator, item.Threshold))
+                    {
+                        int rank = GetSeverityRank(item.Severity);
+                        string key = item.TagName;
+                        if (!highestViolatingRankByTag.TryGetValue(key, out int currentMax) || rank > currentMax)
+                        {
+                            highestViolatingRankByTag[key] = rank;
+                        }
+                    }
+                }
+
+                // 2. Second pass: Process edge state changes
                 foreach (var item in thresholdItems)
                 {
                     if (!item.IsActive) continue;
@@ -288,7 +343,11 @@ namespace HinoTools.Data.Log
                         currentValue = Math.Round(currentValue / 10.0, 2);
                     }
 
-                    bool isViolating = EvaluateThreshold(currentValue, item.Operator, item.Threshold);
+                    bool isPhysicallyViolating = EvaluateThreshold(currentValue, item.Operator, item.Threshold);
+                    int itemRank = GetSeverityRank(item.Severity);
+                    highestViolatingRankByTag.TryGetValue(item.TagName, out int maxRankForTag);
+
+                    bool isViolating = isPhysicallyViolating && (itemRank == maxRankForTag);
                     bool wasAlarming;
                     alarmActiveStates.TryGetValue(item.Alias, out wasAlarming);
 
