@@ -20,8 +20,14 @@ namespace HinoTools.Data.Log
 
         public string Alias { get; set; }
 
-        /// <summary>Ngưỡng cảnh báo (ví dụ: 50 cho nhiệt độ)</summary>
+        /// <summary>Ngưỡng cảnh báo (ví dụ: 50 cho nhiệt độ hoặc giá trị tĩnh mặc định nếu so sánh với tag cài đặt)</summary>
         public double Threshold { get; set; }
+
+        /// <summary>Tên tag cài đặt làm ngưỡng động hoặc rỗng</summary>
+        public string ThresholdTagOrValue { get; set; }
+
+        /// <summary>Đối tượng Tag của ngưỡng động</summary>
+        public ITag ThresholdTag { get; set; }
 
         /// <summary>Toán tử so sánh: ">", "<", "="</summary>
         public string Operator { get; set; } = ">";
@@ -148,11 +154,9 @@ namespace HinoTools.Data.Log
             // Only initialize once, and only when both Driver and Collection are set
             if (tmrScan != null) return;
             if (driver == null || Collection == null || Collection.Length == 0) return;
-
+            deviceName = ExtractDeviceName();
             thresholdItems = GetThresholdItems().ToList();
             if (thresholdItems.Count == 0) return;
-
-            deviceName = ExtractDeviceName();
 
             dataAccess = new DataAccess();
             tmrScan = new System.Timers.Timer();
@@ -181,6 +185,7 @@ namespace HinoTools.Data.Log
                 string tagName = parts[0];
                 string alias = "";
                 double threshold = 0;
+                string thresholdTagOrValue = "";
                 string op = ">";
                 string severity = "ALARM";
                 string eventMessage = "";
@@ -208,7 +213,22 @@ namespace HinoTools.Data.Log
                 if (!isFivePartsFormat)
                 {
                     alias = parts[1];
-                    if (!double.TryParse(parts[2], out threshold)) continue;
+                    string thresholdStr = parts[2].Trim();
+                    double tempThreshold;
+                    if (double.TryParse(thresholdStr, NumberStyles.Float, CultureInfo.InvariantCulture, out tempThreshold))
+                    {
+                        threshold = tempThreshold;
+                    }
+                    else
+                    {
+                        // Dynamic threshold with fallback, e.g. DatNguongNhietDoMoiTruong:45
+                        var thresholdParts = thresholdStr.Split(':');
+                        thresholdTagOrValue = thresholdParts[0].Trim();
+                        if (thresholdParts.Length > 1 && double.TryParse(thresholdParts[1].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out tempThreshold))
+                        {
+                            threshold = tempThreshold;
+                        }
+                    }
 
                     op = parts.Length >= 4 ? parts[3].Trim() : ">";
                     if (op != ">" && op != "<" && op != "=")
@@ -218,12 +238,22 @@ namespace HinoTools.Data.Log
                     eventMessage = parts.Length >= 6 ? parts[5].Trim() : "";
                 }
 
+                ITag thresholdTag = null;
+                if (!string.IsNullOrEmpty(thresholdTagOrValue) && this.driver != null)
+                {
+                    string dev = string.IsNullOrEmpty(deviceName) ? ExtractDeviceName() : deviceName;
+                    thresholdTag = this.driver.GetTagByName(thresholdTagOrValue) ?? 
+                                   this.driver.GetTagByName(dev + "." + thresholdTagOrValue);
+                }
+
                 yield return new ThresholdItem()
                 {
                     TagName = tagName,
                     Tag = this.driver?.GetTagByName(tagName),
                     Alias = alias,
                     Threshold = threshold,
+                    ThresholdTagOrValue = thresholdTagOrValue,
+                    ThresholdTag = thresholdTag,
                     Operator = op,
                     Severity = severity,
                     EventMessageTemplate = eventMessage
@@ -259,6 +289,41 @@ namespace HinoTools.Data.Log
                 case "HIGH": return 4;
                 default: return 0;
             }
+        }
+
+        private double GetCurrentThresholdValue(ThresholdItem item)
+        {
+            double thresholdVal = item.Threshold;
+
+            if (item.ThresholdTag == null && !string.IsNullOrEmpty(item.ThresholdTagOrValue) && driver != null)
+            {
+                item.ThresholdTag = driver.GetTagByName(item.ThresholdTagOrValue) ?? 
+                                    driver.GetTagByName(deviceName + "." + item.ThresholdTagOrValue);
+            }
+
+            if (item.ThresholdTag != null && item.ThresholdTag.Value != null)
+            {
+                double rawThreshold;
+                if (double.TryParse(item.ThresholdTag.Value, out rawThreshold))
+                {
+                    if (item.ThresholdTagOrValue.EndsWith("DatNguongNhietDoMoiTruong", StringComparison.OrdinalIgnoreCase) ||
+                        item.ThresholdTagOrValue.EndsWith("DatNguongDoAmMoiTruong", StringComparison.OrdinalIgnoreCase) ||
+                        item.ThresholdTagOrValue.EndsWith("CaiDatApSuat", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (item.ThresholdTagOrValue.EndsWith("CaiDatApSuat", StringComparison.OrdinalIgnoreCase))
+                        {
+                            rawThreshold = Math.Round(rawThreshold / 100.0, 2);
+                        }
+                        else
+                        {
+                            rawThreshold = Math.Round(rawThreshold / 10.0, 2);
+                        }
+                    }
+                    thresholdVal = rawThreshold;
+                }
+            }
+
+            return thresholdVal;
         }
 
         /// <summary>
@@ -301,7 +366,8 @@ namespace HinoTools.Data.Log
                         currentValue = Math.Round(currentValue / 10.0, 2);
                     }
 
-                    if (EvaluateThreshold(currentValue, item.Operator, item.Threshold))
+                    double thresholdValue = GetCurrentThresholdValue(item);
+                    if (EvaluateThreshold(currentValue, item.Operator, thresholdValue))
                     {
                         int rank = GetSeverityRank(item.Severity);
                         string key = item.TagName;
@@ -343,7 +409,8 @@ namespace HinoTools.Data.Log
                         currentValue = Math.Round(currentValue / 10.0, 2);
                     }
 
-                    bool isPhysicallyViolating = EvaluateThreshold(currentValue, item.Operator, item.Threshold);
+                    double thresholdValue = GetCurrentThresholdValue(item);
+                    bool isPhysicallyViolating = EvaluateThreshold(currentValue, item.Operator, thresholdValue);
                     int itemRank = GetSeverityRank(item.Severity);
                     highestViolatingRankByTag.TryGetValue(item.TagName, out int maxRankForTag);
 
@@ -354,7 +421,7 @@ namespace HinoTools.Data.Log
                     if (isViolating && !wasAlarming)
                     {
                         // Rising edge: first violation -> INSERT and mark as alarming
-                        int alarmId = InsertRealtimeAlarm(item, currentValue);
+                        int alarmId = InsertRealtimeAlarm(item, currentValue, thresholdValue);
                         alarmActiveStates[item.Alias] = true;
                         if (alarmId > 0)
                         {
@@ -504,7 +571,7 @@ namespace HinoTools.Data.Log
         /// Insert a threshold violation record.
         /// Returns the ID of the inserted record.
         /// </summary>
-        private int InsertRealtimeAlarm(ThresholdItem item, double currentValue)
+        private int InsertRealtimeAlarm(ThresholdItem item, double currentValue, double actualThreshold)
         {
             try
             {
@@ -514,7 +581,7 @@ namespace HinoTools.Data.Log
                 dataAccess.ConnectionString = GetConnectionStringWithDb();
 
                 var valStr = currentValue.ToString(CultureInfo.InvariantCulture);
-                var threshStr = item.Threshold.ToString(CultureInfo.InvariantCulture);
+                var threshStr = actualThreshold.ToString(CultureInfo.InvariantCulture);
                 
                 string message;
                 if (!string.IsNullOrEmpty(item.EventMessageTemplate))

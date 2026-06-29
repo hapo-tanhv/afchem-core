@@ -16,6 +16,7 @@ namespace ConsoleApp
                 TestRecoverySelfHealing();
                 TestFivePartThresholdParsing();
                 TestStageDeviationSeverityMapping();
+                TestDynamicThresholdParsing();
                 
                 Console.WriteLine("\n[SUCCESS] All unit tests completed successfully!");
             }
@@ -301,6 +302,64 @@ namespace ConsoleApp
             string sev4 = getSeverity(850, setpoint);
             Console.WriteLine($"Actual: 850, SP: 100 -> Severity: {sev4} (Expected: HIGH)");
             if (sev4 != "HIGH") throw new Exception("Expected HIGH");
+        }
+
+        static void TestDynamicThresholdParsing()
+        {
+            Console.WriteLine("\nRunning TestDynamicThresholdParsing...");
+            string config1 = "AFChemTX01.NhietDoMoiTruong;NhietDoMoiTruong;DatNguongNhietDoMoiTruong:45;>;AVERAGE;Nhiệt độ môi trường vượt ngưỡng cảnh báo";
+            var parts = config1.Split(';');
+            
+            string thresholdStr = parts[2].Trim();
+            double threshold = 0;
+            string thresholdTagOrValue = "";
+            
+            double tempThreshold;
+            if (double.TryParse(thresholdStr, out tempThreshold))
+            {
+                threshold = tempThreshold;
+            }
+            else
+            {
+                var thresholdParts = thresholdStr.Split(':');
+                thresholdTagOrValue = thresholdParts[0].Trim();
+                if (thresholdParts.Length > 1 && double.TryParse(thresholdParts[1].Trim(), out tempThreshold))
+                {
+                    threshold = tempThreshold;
+                }
+            }
+
+            Console.WriteLine($"Parsed - ThresholdTag: {thresholdTagOrValue}, Fallback: {threshold}");
+            if (thresholdTagOrValue != "DatNguongNhietDoMoiTruong" || threshold != 45)
+            {
+                throw new Exception("Dynamic threshold parsing with fallback failed!");
+            }
+
+            // Test parsing without fallback
+            string config2 = "AFChemTX01.DoAmMoiTruong;DoAmMoiTruong;DatNguongDoAmMoiTruong;>;AVERAGE;Độ ẩm";
+            parts = config2.Split(';');
+            thresholdStr = parts[2].Trim();
+            threshold = 0;
+            thresholdTagOrValue = "";
+            if (double.TryParse(thresholdStr, out tempThreshold))
+            {
+                threshold = tempThreshold;
+            }
+            else
+            {
+                var thresholdParts = thresholdStr.Split(':');
+                thresholdTagOrValue = thresholdParts[0].Trim();
+                if (thresholdParts.Length > 1 && double.TryParse(thresholdParts[1].Trim(), out tempThreshold))
+                {
+                    threshold = tempThreshold;
+                }
+            }
+
+            Console.WriteLine($"Parsed - ThresholdTag: {thresholdTagOrValue}, Fallback: {threshold}");
+            if (thresholdTagOrValue != "DatNguongDoAmMoiTruong" || threshold != 0)
+            {
+                throw new Exception("Dynamic threshold parsing without fallback failed!");
+            }
         }
     }
 }
