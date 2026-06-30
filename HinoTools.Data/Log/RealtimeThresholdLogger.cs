@@ -1,4 +1,4 @@
-﻿using ATSCADA;
+using ATSCADA;
 using ATSCADA.ToolExtensions.ExtensionMethods;
 using HinoTools.Data.Database;
 using System;
@@ -335,6 +335,32 @@ namespace HinoTools.Data.Log
             try
             {
                 tmrScan.Stop();
+
+                // If AlarmReportLogger is linked, we only check thresholds when a run is active.
+                // When there is no active run, we resolve any remaining active alarms and skip check.
+                if (AlarmReportLogger != null && !AlarmReportLogger.ActiveRunId.HasValue)
+                {
+                    foreach (var key in alarmActiveStates.Keys.ToList())
+                    {
+                        if (alarmActiveStates[key])
+                        {
+                            int alarmId;
+                            if (activeAlarmRecordIds.TryGetValue(key, out alarmId) && alarmId > 0)
+                            {
+                                UpdateRealtimeAlarmRestoreTime(alarmId);
+                                activeAlarmRecordIds.Remove(key);
+                            }
+                            else
+                            {
+                                UpdateLastActiveAlarmRestoreTime(key);
+                            }
+                            alarmActiveStates[key] = false;
+                        }
+                    }
+
+                    tmrScan.Start();
+                    return;
+                }
 
                 // 1. First pass: Determine the highest violating severity rank for each TagName
                 var highestViolatingRankByTag = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
