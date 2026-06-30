@@ -91,6 +91,7 @@ namespace WindowsFormsApp1
         "AFChemTX01.NhietDoBonTronTren;NhietDoBonTronTren",
         "AFChemTX01.NhietDoBonTronGiua;NhietDoBonTronGiua",
         "AFChemTX01.NhietDoBonTronDuoi;NhietDoBonTronDuoi",
+        "AFChemTX01.ThoiGianDongCoTron;ThoiGianDongCoTron",
         "AFChemTX01.MayLoi;MayLoi"};
             this.alarmReportLogger1.DatabaseName = "scada";
             this.alarmReportLogger1.Driver = this.iDriver1;

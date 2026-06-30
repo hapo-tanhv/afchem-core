@@ -66,6 +66,7 @@ namespace TestData
         "AFChemTX01.ThoiGianXaHang;ThoiGianXaHang",
         "AFChemTX01.ThoiGianRungXaHang;ThoiGianRungXaHang",
         "AFChemTX01.NhietDoDayBuongTron;NhietDoDayBuongTron",
+        "AFChemTX01.ThoiGianDongCoTron;ThoiGianDongCoTron",
         "AFChemTX01.NhietDoNapBuongTron;NhietDoNapBuongTron"};
             this.alarmReportLogger1.DatabaseName = "scada";
             this.alarmReportLogger1.Driver = this.iDriver1;

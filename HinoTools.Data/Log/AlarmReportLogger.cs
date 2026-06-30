@@ -1134,6 +1134,16 @@ namespace HinoTools.Data.Log
                 dataAccess.ConnectionString = GetConnectionStringWithDb();
                 string nowStr = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
 
+                // Evaluate any remaining stage duration alarms before the run fails
+                CheckAndLogStageDurationAlarm("T001", GetAccumulatedValue("ThoiGianCapLieu"));
+                CheckAndLogStageDurationAlarm("T002", GetAccumulatedValue("ThoiGianTron1"));
+                CheckAndLogStageDurationAlarm("T003", GetAccumulatedValue("ThoiGianXaDay"));
+                CheckAndLogStageDurationAlarm("T004", GetAccumulatedValue("ThoiGianRungXaDay"));
+                CheckAndLogStageDurationAlarm("T005", GetAccumulatedValue("ThoiGianHutXaDay"));
+                CheckAndLogStageDurationAlarm("T006", GetAccumulatedValue("ThoiGianTron2"));
+                CheckAndLogStageDurationAlarm("T007", GetAccumulatedValue("ThoiGianXaHang"));
+                CheckAndLogStageDurationAlarm("T008", GetAccumulatedValue("ThoiGianRungXaHang"));
+
                 // 1. Mark the active Run as 'Error'
                 string failRunQuery = string.Format("UPDATE `runs` SET `status` = 'Error', `end_time` = '{0}', `is_paused` = 0 WHERE `id` = {1}", nowStr, activeRunId.Value);
                 dataAccess.ExecuteNonQuery(failRunQuery);
@@ -1619,6 +1629,16 @@ namespace HinoTools.Data.Log
             {
                 dataAccess.ConnectionString = GetConnectionStringWithDb();
                 string nowStr = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+
+                // Evaluate any remaining stage duration alarms before the run completes
+                CheckAndLogStageDurationAlarm("T001", GetAccumulatedValue("ThoiGianCapLieu"));
+                CheckAndLogStageDurationAlarm("T002", GetAccumulatedValue("ThoiGianTron1"));
+                CheckAndLogStageDurationAlarm("T003", GetAccumulatedValue("ThoiGianXaDay"));
+                CheckAndLogStageDurationAlarm("T004", GetAccumulatedValue("ThoiGianRungXaDay"));
+                CheckAndLogStageDurationAlarm("T005", GetAccumulatedValue("ThoiGianHutXaDay"));
+                CheckAndLogStageDurationAlarm("T006", GetAccumulatedValue("ThoiGianTron2"));
+                CheckAndLogStageDurationAlarm("T007", GetAccumulatedValue("ThoiGianXaHang"));
+                CheckAndLogStageDurationAlarm("T008", GetAccumulatedValue("ThoiGianRungXaHang"));
 
                 // 1. Complete the active Run
                 string completeRunQuery = $"UPDATE `runs` " +

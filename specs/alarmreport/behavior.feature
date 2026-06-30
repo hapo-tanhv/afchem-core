@@ -6,7 +6,7 @@ Feature: Định kỳ ghi nhận báo cáo mẻ trộn (Alarm Report)
   Background:
     Given Hệ thống HinoTools.Alarm đang chạy và kết nối SCADA
     And Component "AlarmReportLogger" đang hoạt động với vòng lặp 30s
-    And Bảng "alarmreport" đã có đủ 17 cột thanh ghi + TagNo + QuyTrinh + CongDoanMay
+    And Bảng "alarmreport" đã có đủ 18 cột thanh ghi + TagNo + QuyTrinh + CongDoanMay
 
   Scenario: Bắt đầu mẻ mới (Quy trình mới) khi nạp liệu
     Given Hệ thống đang ở trạng thái chờ (không ghi log)
@@ -18,7 +18,7 @@ Feature: Định kỳ ghi nhận báo cáo mẻ trộn (Alarm Report)
   Scenario: Ghi log liên tục trong suốt 5 công đoạn
     Given Hệ thống đang ở trạng thái "Đang ghi log mẻ trộn"
     When Timer đếm đủ 30 giây
-    Then Hệ thống đọc toàn bộ 17 thanh ghi từ SCADA
+    Then Hệ thống đọc toàn bộ 18 thanh ghi từ SCADA
     And Thực hiện lệnh INSERT xuống bảng "alarmreport" với cùng một ID QuyTrinh hiện tại
 
   Scenario: Nhận diện hoàn thành công đoạn 3 (Xả đáy)

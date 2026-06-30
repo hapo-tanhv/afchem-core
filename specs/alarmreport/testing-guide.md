@@ -14,7 +14,7 @@
 - Database: `scada` (sẽ được tự động tạo)
 
 ### 2. Cấu hình SCADA
-- Mở project ATSCADA có Device `AFChemTX01` với đầy đủ 17 tag thanh ghi.
+- Mở project ATSCADA có Device `AFChemTX01` với đầy đủ 18 tag thanh ghi.
 - Đảm bảo `iDriver` có thể đọc giá trị từ PLC.
 
 ---
