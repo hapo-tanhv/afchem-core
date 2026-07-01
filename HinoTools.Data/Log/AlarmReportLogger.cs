@@ -418,7 +418,7 @@ namespace HinoTools.Data.Log
 
                 double stopValue = GetSystemTagValue("Stop");
                 double runValue = GetSystemTagValue("Run");
-                bool isStopped = (stopValue == 1);
+                bool isStopped = (stopValue == 1) || (GetSystemTagValue("MayLoi") > 0);
 
                 System.Diagnostics.Debug.WriteLine(string.Format("[AlarmReportLogger] Poll: CongDoan={0}, QuyTrinh={1}, ActiveRun={2}, ActiveBatch={3}, Stop={4}, Run={5}", 
                     currentCongDoan, currentQuyTrinh, activeRunId, activeBatchId, stopValue, runValue));
@@ -500,54 +500,30 @@ namespace HinoTools.Data.Log
                         }
                         else
                         {
-                            bool isPauseActive = thoiGianCapLieu > 0 ||
-                                                 thoiGianTron1 > 0 ||
-                                                 thoiGianXaDay > 0 ||
-                                                 thoiGianRungXaDay > 0 ||
-                                                 thoiGianHutXa > 0 ||
-                                                 thoiGianTron2 > 0 ||
-                                                 thoiGianXaHang > 0 ||
-                                                 thoiGianRungXaHang > 0;
+                            // Reset started flags when stopped/paused to avoid false transitions on resume
+                            ResetFlags();
 
-                            if (isPauseActive)
+                            // Track timeout for long stopped state (e.g. 2 hours)
+                            if (stopStartTime == null)
                             {
-                                // Reset started flags when stopped/paused to avoid false transitions on resume
-                                ResetFlags();
-
-                                // Track timeout for long stopped state (e.g. 2 hours)
-                                if (stopStartTime == null)
-                                {
-                                    stopStartTime = DateTime.Now;
-                                    InsertPauseRecord(); // Log pause event!
-                                    UpdateRunPauseStatus(activeRunId, 1); // Set runs.is_paused = 1
-                                }
-                                else
-                                {
-                                    double elapsed = (DateTime.Now - stopStartTime.Value).TotalSeconds;
-                                    if (elapsed >= StopTimeout)
-                                    {
-                                        System.Diagnostics.Debug.WriteLine(string.Format("[AlarmReportLogger] Run stopped for {0}s. Auto-cleaning and marking as Error.", elapsed));
-                                        
-                                        // Update active stage's accumulator with pause duration
-                                        AddPauseDurationToActiveStage(elapsed);
-
-                                        InsertAlarmReport();
-                                        UpdatePauseRecord(DateTime.Now); // Close the pause event
-                                        FailActiveBatch();
-                                        currentCongDoan = 0; // Return to Idle
-                                        stopStartTime = null;
-                                    }
-                                }
+                                stopStartTime = DateTime.Now;
+                                InsertPauseRecord(); // Log pause event!
+                                UpdateRunPauseStatus(activeRunId, 1); // Set runs.is_paused = 1
                             }
                             else
                             {
-                                // Stop = 1 but all registers are 0. This is not a temporary pause.
-                                // Close the pause record if it was active.
-                                if (stopStartTime != null)
+                                double elapsed = (DateTime.Now - stopStartTime.Value).TotalSeconds;
+                                if (elapsed >= StopTimeout)
                                 {
-                                    System.Diagnostics.Debug.WriteLine("[AlarmReportLogger] Stop = 1 and all registers are 0. Closing existing pause record.");
-                                    UpdatePauseRecord(DateTime.Now);
-                                    UpdateRunPauseStatus(activeRunId, 0); // Set runs.is_paused = 0
+                                    System.Diagnostics.Debug.WriteLine(string.Format("[AlarmReportLogger] Run stopped for {0}s. Auto-cleaning and marking as Error.", elapsed));
+                                    
+                                    // Update active stage's accumulator with pause duration
+                                    AddPauseDurationToActiveStage(elapsed);
+
+                                    InsertAlarmReport();
+                                    UpdatePauseRecord(DateTime.Now); // Close the pause event
+                                    FailActiveBatch();
+                                    currentCongDoan = 0; // Return to Idle
                                     stopStartTime = null;
                                 }
                             }
@@ -824,6 +800,57 @@ namespace HinoTools.Data.Log
                 }
                 accumulatedTimers[activeAlias] += pauseSeconds;
                 System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] Added pause duration of {pauseSeconds}s to active stage '{activeAlias}'. Total: {accumulatedTimers[activeAlias]}s");
+            }
+        }
+
+        private int GetStepCodeFromCongDoanCode(string code)
+        {
+            if (string.IsNullOrEmpty(code)) return 0;
+            switch (code)
+            {
+                case "T001": return 1;
+                case "T002": return 2;
+                case "T003": return 3;
+                case "T004": return 4;
+                case "T005": return 5;
+                case "T006": return 6;
+                case "T007": return 7;
+                case "T008": return 8;
+                default: return 0;
+            }
+        }
+
+        private void SyncRunStepAccumulatedTimes()
+        {
+            if (activeRunId == null) return;
+            string code = CurrentCongDoanCode;
+            int stepCode = GetStepCodeFromCongDoanCode(code);
+            if (stepCode == 0) return;
+
+            string aliasName = GetStageAliasName(code);
+            if (string.IsNullOrEmpty(aliasName)) return;
+
+            int accValInt = (int)Math.Round(GetAccumulatedValue(aliasName));
+            try
+            {
+                dataAccess.ConnectionString = GetConnectionStringWithDb();
+                
+                string checkQuery = string.Format("SELECT COUNT(*) FROM `run_step_accumulated_times` WHERE `runId` = {0} AND `stepCode` = {1}", activeRunId.Value, stepCode);
+                var countObj = dataAccess.ExecuteScalarQuery(checkQuery);
+                if (countObj == null || countObj == DBNull.Value || Convert.ToInt32(countObj) == 0)
+                {
+                    string insertQuery = string.Format("INSERT IGNORE INTO `run_step_accumulated_times` (`runId`, `stepCode`, `accumulatedTime`) VALUES ({0}, {1}, 0)", activeRunId.Value, stepCode);
+                    dataAccess.ExecuteNonQuery(insertQuery);
+                }
+
+                string updateQuery = string.Format(
+                    "UPDATE `run_step_accumulated_times` SET `accumulatedTime` = {0} WHERE `runId` = {1} AND `stepCode` = {2}",
+                    accValInt, activeRunId.Value, stepCode);
+                dataAccess.ExecuteNonQuery(updateQuery);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] SyncRunStepAccumulatedTimes ERROR: {ex.Message}");
             }
         }
 
@@ -1833,7 +1860,7 @@ namespace HinoTools.Data.Log
                     {
                         if (IsActiveStageTimerForCongDoan(item.Alias, currentCongDoan))
                         {
-                            value = GetAccumulatedValue(item.Alias).ToString(System.Globalization.CultureInfo.InvariantCulture);
+                            value = ((int)Math.Round(GetAccumulatedValue(item.Alias))).ToString(System.Globalization.CultureInfo.InvariantCulture);
                         }
                         else
                         {
@@ -1856,7 +1883,12 @@ namespace HinoTools.Data.Log
                     $"(`DateTime`, `DeviceName`, `QuyTrinh`, `CongDoanMay`, `batchId`, `runId`{fieldBuilder}) " +
                     $"VALUES ('{DateTime.Now:yyyy-MM-dd HH:mm:ss}', '{deviceName}', {currentQuyTrinh}, {currentCongDoan}, {batchIdValue}, {runIdValue}{valueBuilder})";
 
-                return dataAccess.ExecuteNonQuery(query) >= 0;
+                int rows = dataAccess.ExecuteNonQuery(query);
+                if (rows >= 0)
+                {
+                    SyncRunStepAccumulatedTimes();
+                }
+                return rows >= 0;
             }
             catch (Exception ex) 
             { 
@@ -2253,10 +2285,13 @@ namespace HinoTools.Data.Log
                     }
                 }
 
+                int valInt = (int)Math.Round(value);
+                int threshInt = (int)Math.Round(threshold);
+
                 var query = string.Format(
                     "INSERT INTO `{0}` (`DateTime`, `DeviceName`, `TagName`, `Value`, `Threshold`, `Operator`, `Message`, `QuyTrinh`, `CongDoan`, `batchId`, `runId`, `Severity`, `restore_time`) " +
                     "VALUES ('{1:yyyy-MM-dd HH:mm:ss}', '{2}', '{3}', {4}, {5}, '>', '{6}', {7}, '{8}', {9}, {10}, '{11}', '{1:yyyy-MM-dd HH:mm:ss}')",
-                    tblName, DateTime.Now, deviceName, tagName, value, threshold, message, currentQuyTrinh, tagNo, batchIdValue, runIdValue, severity);
+                    tblName, DateTime.Now, deviceName, tagName, valInt, threshInt, message, currentQuyTrinh, tagNo, batchIdValue, runIdValue, severity);
 
                 return dataAccess.ExecuteNonQuery(query) >= 0;
             }
