@@ -1,4 +1,4 @@
-﻿using ATSCADA;
+using ATSCADA;
 using ATSCADA.ToolExtensions.ExtensionMethods;
 using HinoTools.Data.Database;
 using System;
@@ -470,6 +470,13 @@ namespace HinoTools.Data.Log
                     {
                         System.Diagnostics.Debug.WriteLine(string.Format("[AlarmReportLogger] Reset detected in stage {0}. Aborting run.", currentCongDoan));
                         
+                        // Add pause duration to accumulator if stopped before reset
+                        if (stopStartTime != null)
+                        {
+                            double pauseSeconds = (DateTime.Now - stopStartTime.Value).TotalSeconds;
+                            AddPauseDurationToActiveStage(pauseSeconds);
+                        }
+
                         // Capture final state in alarmreport log
                         InsertAlarmReport();
                         
@@ -520,6 +527,10 @@ namespace HinoTools.Data.Log
                                     if (elapsed >= StopTimeout)
                                     {
                                         System.Diagnostics.Debug.WriteLine(string.Format("[AlarmReportLogger] Run stopped for {0}s. Auto-cleaning and marking as Error.", elapsed));
+                                        
+                                        // Update active stage's accumulator with pause duration
+                                        AddPauseDurationToActiveStage(elapsed);
+
                                         InsertAlarmReport();
                                         UpdatePauseRecord(DateTime.Now); // Close the pause event
                                         FailActiveBatch();
@@ -548,6 +559,11 @@ namespace HinoTools.Data.Log
                         if (stopStartTime != null)
                         {
                             System.Diagnostics.Debug.WriteLine("[AlarmReportLogger] Machine resumed. Resetting timeout tracker.");
+                            
+                            // Add pause duration to accumulator
+                            double pauseSeconds = (DateTime.Now - stopStartTime.Value).TotalSeconds;
+                            AddPauseDurationToActiveStage(pauseSeconds);
+
                             UpdatePauseRecord(DateTime.Now); // Close the pause event
                             UpdateRunPauseStatus(activeRunId, 0); // Set runs.is_paused = 0
                             stopStartTime = null;
@@ -788,6 +804,27 @@ namespace HinoTools.Data.Log
             accumulatedTimers[alias] = 0;
             previousTimerValues.Remove(alias);
             System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] Reset accumulator and removed previous value cache for stage alias '{alias}'.");
+        }
+
+        private string GetActiveStageAlias()
+        {
+            string code = CurrentCongDoanCode;
+            if (string.IsNullOrEmpty(code)) return null;
+            return GetStageAliasName(code);
+        }
+
+        private void AddPauseDurationToActiveStage(double pauseSeconds)
+        {
+            string activeAlias = GetActiveStageAlias();
+            if (!string.IsNullOrEmpty(activeAlias))
+            {
+                if (!accumulatedTimers.ContainsKey(activeAlias))
+                {
+                    accumulatedTimers[activeAlias] = 0;
+                }
+                accumulatedTimers[activeAlias] += pauseSeconds;
+                System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] Added pause duration of {pauseSeconds}s to active stage '{activeAlias}'. Total: {accumulatedTimers[activeAlias]}s");
+            }
         }
 
         private void UpdateAccumulator(string alias, double currentVal)
