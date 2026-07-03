@@ -92,7 +92,13 @@ namespace WindowsFormsApp1
         "AFChemTX01.NhietDoBonTronGiua;NhietDoBonTronGiua",
         "AFChemTX01.NhietDoBonTronDuoi;NhietDoBonTronDuoi",
         "AFChemTX01.ThoiGianDongCoTron;ThoiGianDongCoTron",
-        "AFChemTX01.MayLoi;MayLoi"};
+        "AFChemTX01.MayLoi;MayLoi",
+        "AFChemTX01.DatNguongNhietDoNapBon;DatNguongNhietDoNapBon",
+        "AFChemTX01.DatNguongNhietDoGiuaBon;DatNguongNhietDoGiuaBon",
+        "AFChemTX01.DatNguongNhietDoDayBon;DatNguongNhietDoDayBon",
+        "AFChemTX01.DongCoTronDangHoatDong;DongCoTronDangHoatDong",
+        "AFChemTX01.DongCoHutDangHoatDong;DongCoHutDangHoatDong",
+        "AFChemTX01.DongCoXaDangHoatDong;DongCoXaDangHoatDong"};
             this.alarmReportLogger1.DatabaseName = "scada";
             this.alarmReportLogger1.Driver = this.iDriver1;
             this.alarmReportLogger1.HttpPort = 5500;
@@ -115,12 +121,12 @@ namespace WindowsFormsApp1
             " trường vượt ngưỡng cảnh báo",
         "AFChemTX01.ApSuat;2;<;HIGH;Áp suất hệ thống quá thấp",
         "AFChemTX01.ApSuat;3;<;AVERAGE;Áp suất hệ thống quá thấp",
-        "AFChemTX01.NhietDoBonTronGiua;NhietDoBonTronGiua;40;>;HIGH;Nhiệt độ bồn trộn giữa" +
-            " vượt ngưỡng cảnh báo",
-        "AFChemTX01.NhietDoBonTronDuoi;NhietDoBonTronDuoi;40;>;HIGH;Nhiệt độ bồn trộn dưới" +
-            " quá cao",
-        "AFChemTX01.NhietDoBonTronTren;NhietDoBonTronTren;40;>;HIGH;Nhiệt độ bồn trộn trên" +
-            " quá cao",
+        "AFChemTX01.NhietDoBonTronGiua;NhietDoBonTronGiua;DatNguongNhietDoGiuaBon:40;>;HIG" +
+            "H;Nhiệt độ bồn trộn giữa vượt ngưỡng cảnh báo",
+        "AFChemTX01.NhietDoBonTronDuoi;NhietDoBonTronDuoi;DatNguongNhietDoDayBon:40;>;HIGH" +
+            ";Nhiệt độ bồn trộn dưới quá cao",
+        "AFChemTX01.NhietDoBonTronTren;NhietDoBonTronTren;DatNguongNhietDoNapBon:40;>;HIGH" +
+            ";Nhiệt độ bồn trộn trên quá cao",
         "AFChemTX01.MayLoi;1;=;HIGH;Dừng khẩn cấp",
         "AFChemTX01.MayLoi;2;=;HIGH;Lỗi nguồn động cơ trộn",
         "AFChemTX01.MayLoi;3;=;HIGH;Lỗi nguồn động cơ hút",

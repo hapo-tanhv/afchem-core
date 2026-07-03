@@ -2186,15 +2186,11 @@ namespace HinoTools.Data.Log
                 }
 
                 // 3. Compare: value (actualDuration) > threshold (setpoint)
-                if (actualDuration > setpoint)
+                double deviation = actualDuration - setpoint;
+                if (deviation >= 300)
                 {
-                    double deviation = actualDuration - setpoint;
-                    string severity = "LOW";
-                    if (deviation >= 300 && deviation <= 600)
-                    {
-                        severity = "AVERAGE";
-                    }
-                    else if (deviation > 600)
+                    string severity = "AVERAGE";
+                    if (deviation > 600)
                     {
                         severity = "HIGH";
                     }
