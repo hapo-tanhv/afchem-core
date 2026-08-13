@@ -41,7 +41,31 @@ namespace HinoTools.Alarm.Control
         public string UserID { get; set; } = "root";
 
         [Category("Hino Settings")]
-        public string Password { get; set; } = "101101";
+        public string Password { get; set; } = "";
+
+        // --- Đợt 3B: thông tin đăng nhập MySQL không còn nhúng trong mã nguồn. ---
+        // Ưu tiên giá trị đặt tường minh trên component (ATSCADA designer), sau đó tới
+        // file scada-runtime.config. Thiếu cả hai với user/mật khẩu => báo lỗi rõ ràng
+        // thay vì âm thầm dùng tài khoản mặc định. Xem HinoTools.Data.Config.ScadaConfig.
+        private string DbServer
+        {
+            get { return HinoTools.Data.Config.ScadaConfig.ResolveOptional(ServerName, HinoTools.Data.Config.ScadaConfig.KeyDbServer, "localhost"); }
+        }
+
+        private string DbUser
+        {
+            get { return HinoTools.Data.Config.ScadaConfig.Resolve(UserID, HinoTools.Data.Config.ScadaConfig.KeyDbUser); }
+        }
+
+        private string DbPassword
+        {
+            get { return HinoTools.Data.Config.ScadaConfig.Resolve(Password, HinoTools.Data.Config.ScadaConfig.KeyDbPassword); }
+        }
+
+        private string DbName
+        {
+            get { return HinoTools.Data.Config.ScadaConfig.ResolveOptional(DatabaseName, HinoTools.Data.Config.ScadaConfig.KeyDbName, "scada"); }
+        }
 
         [Category("Hino Settings")]
         public string DatabaseName { get; set; } = "scada";
@@ -90,8 +114,8 @@ namespace HinoTools.Alarm.Control
         {
             try
             {
-                this.dataAccess.ConnectionString = $"Server={ServerName};Uid={UserID};Pwd={Password};";
-                var query = $"create database if not exists {DatabaseName}";
+                this.dataAccess.ConnectionString = $"Server={DbServer};Uid={DbUser};Pwd={DbPassword};CharSet=utf8;";
+                var query = $"create database if not exists {DbName}";
                 return this.dataAccess.ExecuteNonQuery(query) >= 0;
             }
             catch { return false; }
@@ -101,7 +125,7 @@ namespace HinoTools.Alarm.Control
         {
             try
             {
-                this.dataAccess.ConnectionString = $"Server={ServerName};Uid={UserID};Pwd={Password}; Database={DatabaseName}";
+                this.dataAccess.ConnectionString = $"Server={DbServer};Uid={DbUser};Pwd={DbPassword};CharSet=utf8; Database={DbName}";
                 var query = $"create table if not exists {TableName} (" +
                     $"`ID` varchar(100) not null, " +
                     $"`OccurrenceTime` DateTime null, " +
@@ -125,7 +149,7 @@ namespace HinoTools.Alarm.Control
         {
             try
             {
-                this.dataAccess.ConnectionString = $"Server={ServerName};Uid={UserID};Pwd={Password}; Database={DatabaseName}";
+                this.dataAccess.ConnectionString = $"Server={DbServer};Uid={DbUser};Pwd={DbPassword};CharSet=utf8; Database={DbName}";
                 string checkQuery = $"SHOW COLUMNS FROM `{tableName}` LIKE 'batchId'";
                 var result = this.dataAccess.ExecuteScalarQuery(checkQuery);
                 if (result == null || result == DBNull.Value)
@@ -145,7 +169,7 @@ namespace HinoTools.Alarm.Control
         {
             try
             {
-                this.dataAccess.ConnectionString = $"Server={ServerName};Uid={UserID};Pwd={Password}; Database={DatabaseName}";
+                this.dataAccess.ConnectionString = $"Server={DbServer};Uid={DbUser};Pwd={DbPassword};CharSet=utf8; Database={DbName}";
                 string checkQuery = $"SHOW COLUMNS FROM `{tableName}` LIKE 'runId'";
                 var result = this.dataAccess.ExecuteScalarQuery(checkQuery);
                 if (result == null || result == DBNull.Value)
@@ -168,27 +192,25 @@ namespace HinoTools.Alarm.Control
             }
         }
 
+        /// <summary>
+        /// Đợt 3B: KHÔNG còn rơi về "TX01". Không phân giải được máy thì trả null,
+        /// người gọi phải bỏ qua bản ghi và ghi log lỗi — thà thiếu một dòng cảnh báo
+        /// còn hơn gán cảnh báo của máy lạ sang máy TX01 có thật.
+        /// </summary>
         private string ExtractDeviceName(string tagName)
         {
             WriteDebugLog(string.Format("[ExtractDeviceName] Input TagName: '{0}'", tagName));
-            if (string.IsNullOrEmpty(tagName))
+
+            string deviceName;
+            string reason;
+            if (HinoTools.Data.Helper.DeviceNameHelper.TryExtractDeviceName(tagName, out deviceName, out reason))
             {
-                WriteDebugLog("[ExtractDeviceName] TagName is empty, fallback to TX01");
-                return "TX01";
+                WriteDebugLog(string.Format("[ExtractDeviceName] Extracted: '{0}'", deviceName));
+                return deviceName;
             }
 
-            var dotIndex = tagName.IndexOf('.');
-            string prefix = dotIndex > 0 ? tagName.Substring(0, dotIndex) : tagName;
-
-            if (prefix.StartsWith("AFChem", StringComparison.OrdinalIgnoreCase) && prefix.Length > 6)
-            {
-                string dev = prefix.Substring(6);
-                WriteDebugLog(string.Format("[ExtractDeviceName] Extracted: '{0}' from prefix '{1}'", dev, prefix));
-                return dev;
-            }
-
-            WriteDebugLog(string.Format("[ExtractDeviceName] Prefix '{0}' does not match AFChem pattern. Fallback to TX01.", prefix));
-            return "TX01";
+            WriteDebugLog(string.Format("[ExtractDeviceName] KHÔNG XÁC ĐỊNH ĐƯỢC MÁY: {0}", reason));
+            return null;
         }
 
         private void GetActiveBatchAndRunId(string deviceName, bool isNewRunStart, out int? batchId, out int? runId)
@@ -198,7 +220,7 @@ namespace HinoTools.Alarm.Control
             WriteDebugLog(string.Format("[GetActiveBatchAndRunId] Start query for device: '{0}', isNewRunStart: {1}", deviceName, isNewRunStart));
             try
             {
-                this.dataAccess.ConnectionString = $"Server={ServerName};Uid={UserID};Pwd={Password}; Database={DatabaseName}";
+                this.dataAccess.ConnectionString = $"Server={DbServer};Uid={DbUser};Pwd={DbPassword};CharSet=utf8; Database={DbName}";
                 string nowStr = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
 
                 if (isNewRunStart)
@@ -473,7 +495,7 @@ namespace HinoTools.Alarm.Control
                 alarmItem.Status));
             try
             {
-                this.dataAccess.ConnectionString = $"Server={ServerName};Uid={UserID};Pwd={Password}; Database={DatabaseName}";
+                this.dataAccess.ConnectionString = $"Server={DbServer};Uid={DbUser};Pwd={DbPassword};CharSet=utf8; Database={DbName}";
                 var occurrenceTime = alarmItem.OccurrenceTime == DateTime.MinValue ?
                     $"'{DateTime.Now:yyyy-MM-dd HH:mm:ss}'" :
                     $"'{alarmItem.OccurrenceTime:yyyy-MM-dd HH:mm:ss}'";
@@ -487,7 +509,18 @@ namespace HinoTools.Alarm.Control
                 }
 
                 string deviceName = ExtractDeviceName(alarmItem.Param.TagName);
-                bool isNewRunStart = alarmItem.Param.TagName.EndsWith("ThoiGianCapLieu", StringComparison.OrdinalIgnoreCase) 
+                if (string.IsNullOrEmpty(deviceName))
+                {
+                    // Đợt 3B: fail-loud. Trước đây chỗ này gán "TX01" nên cảnh báo của tag lạ
+                    // bị ghi nhầm sang máy TX01. Nay bỏ qua bản ghi và để lại vết rõ ràng.
+                    WriteDebugLog(string.Format(
+                        "[InsertAlarm] TỪ CHỐI GHI: tag '{0}' không xác định được máy. " +
+                        "Kiểm tra quy ước đặt tên tag hoặc khai báo máy trong bảng machines.",
+                        alarmItem.Param.TagName));
+                    return;
+                }
+
+                bool isNewRunStart = alarmItem.Param.TagName.EndsWith("ThoiGianCapLieu", StringComparison.OrdinalIgnoreCase)
                                        && alarmItem.Status == AlarmStatus.ALARM;
 
                 // Check if an active alarm for this tag already exists in database for the active run of this device

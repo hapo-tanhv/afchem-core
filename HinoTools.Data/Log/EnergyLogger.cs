@@ -77,7 +77,31 @@ namespace HinoTools.Data.Log
         public string UserID { get; set; } = "root";
 
         [Category("Hino Settings")]
-        public string Password { get; set; } = "101101";
+        public string Password { get; set; } = "";
+
+        // --- Đợt 3B: thông tin đăng nhập MySQL không còn nhúng trong mã nguồn. ---
+        // Ưu tiên giá trị đặt tường minh trên component (ATSCADA designer), sau đó tới
+        // file scada-runtime.config. Thiếu cả hai với user/mật khẩu => báo lỗi rõ ràng
+        // thay vì âm thầm dùng tài khoản mặc định. Xem HinoTools.Data.Config.ScadaConfig.
+        private string DbServer
+        {
+            get { return HinoTools.Data.Config.ScadaConfig.ResolveOptional(ServerName, HinoTools.Data.Config.ScadaConfig.KeyDbServer, "localhost"); }
+        }
+
+        private string DbUser
+        {
+            get { return HinoTools.Data.Config.ScadaConfig.Resolve(UserID, HinoTools.Data.Config.ScadaConfig.KeyDbUser); }
+        }
+
+        private string DbPassword
+        {
+            get { return HinoTools.Data.Config.ScadaConfig.Resolve(Password, HinoTools.Data.Config.ScadaConfig.KeyDbPassword); }
+        }
+
+        private string DbName
+        {
+            get { return HinoTools.Data.Config.ScadaConfig.ResolveOptional(DatabaseName, HinoTools.Data.Config.ScadaConfig.KeyDbName, "scada"); }
+        }
 
         [Category("Hino Settings")]
         public string DatabaseName { get; set; } = "scada";
@@ -163,11 +187,11 @@ namespace HinoTools.Data.Log
             try
             {
                 this.dataAccess.ConnectionString =
-                    $"Server={ServerName};" +
-                    $"Uid={UserID};" +
-                    $"Pwd={Password};";
+                    $"Server={DbServer};" +
+                    $"Uid={DbUser};" +
+                    $"Pwd={DbPassword};CharSet=utf8;";
 
-                var query = $"create database if not exists {DatabaseName}";
+                var query = $"create database if not exists {DbName}";
 
                 return this.dataAccess.ExecuteNonQuery(query) < 0 ? false : true;
             }
@@ -179,10 +203,10 @@ namespace HinoTools.Data.Log
             try
             {
                 this.dataAccess.ConnectionString =
-                    $"Server={ServerName};" +
-                    $"Uid={UserID};" +
-                    $"Pwd={Password};" +
-                    $"Database={DatabaseName}";
+                    $"Server={DbServer};" +
+                    $"Uid={DbUser};" +
+                    $"Pwd={DbPassword};CharSet=utf8;" +
+                    $"Database={DbName}";
 
                 var query = $"create table if not exists `{TableName}` (" +
                     $"`start_time` datetime not null, " +
@@ -209,10 +233,10 @@ namespace HinoTools.Data.Log
             try
             {
                 this.dataAccess.ConnectionString =
-                    $"Server={ServerName};" +
-                    $"Uid={UserID};" +
-                    $"Pwd={Password};" +
-                    $"Database={DatabaseName}";
+                    $"Server={DbServer};" +
+                    $"Uid={DbUser};" +
+                    $"Pwd={DbPassword};CharSet=utf8;" +
+                    $"Database={DbName}";
 
                 var command = $"insert into `{TableName}` " +
                     $"(`start_time`, `end_time`, `group_name`, `device_name`, `device_tag_name`, `value`, `direction`, `data_type`, `time_unit`) values (" +

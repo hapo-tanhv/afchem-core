@@ -57,7 +57,7 @@ namespace WindowsFormsApp1
             this.alarmServer1.DatabaseName = "scada";
             this.alarmServer1.Driver = this.iDriver1;
             this.alarmServer1.Limit = 20;
-            this.alarmServer1.Password = "101101";
+            this.alarmServer1.Password = "";
             this.alarmServer1.ServerName = "localhost";
             this.alarmServer1.TableLog = "alarmlog";
             this.alarmServer1.TableName = "alarmsettings";
@@ -67,7 +67,7 @@ namespace WindowsFormsApp1
             // 
             this.alarmLogger1.AlarmHub = this.alarmServer1;
             this.alarmLogger1.DatabaseName = "scada";
-            this.alarmLogger1.Password = "101101";
+            this.alarmLogger1.Password = "";
             this.alarmLogger1.ServerName = "localhost";
             this.alarmLogger1.TableName = "alarmlog";
             this.alarmLogger1.UserID = "root";
@@ -102,14 +102,14 @@ namespace WindowsFormsApp1
             this.alarmReportLogger1.DatabaseName = "scada";
             this.alarmReportLogger1.Driver = this.iDriver1;
             this.alarmReportLogger1.HttpPort = 5500;
-            this.alarmReportLogger1.Password = "101101";
+            this.alarmReportLogger1.Password = "";
             this.alarmReportLogger1.PollingInterval = 30000;
             this.alarmReportLogger1.ServerName = "localhost";
             this.alarmReportLogger1.StopTimeout = 7200;
             this.alarmReportLogger1.TableName = "alarmreport";
             this.alarmReportLogger1.UserID = "root";
             this.alarmReportLogger1.WebhookPort = 5605;
-            this.alarmReportLogger1.WebhookToken = "wh_tok_2f8d9b1e4c7a6e5b3d2c1f0a9e8d7c6b";
+            this.alarmReportLogger1.WebhookToken = "";
             // 
             // realtimeThresholdLogger1
             // 
@@ -135,7 +135,7 @@ namespace WindowsFormsApp1
         "AFChemTX01.MayLoi;9;=;HIGH;Lỗi nguồn động cơ Xả"};
             this.realtimeThresholdLogger1.DatabaseName = "scada";
             this.realtimeThresholdLogger1.Driver = this.iDriver1;
-            this.realtimeThresholdLogger1.Password = "101101";
+            this.realtimeThresholdLogger1.Password = "";
             this.realtimeThresholdLogger1.ScanInterval = 3000;
             this.realtimeThresholdLogger1.ServerName = "localhost";
             this.realtimeThresholdLogger1.TableName = "realtime_alarms";

@@ -61,7 +61,7 @@ Lưu định mức nguyên vật liệu của từng mẻ con để so sánh v�
 
 Dùng để Base gửi dữ liệu kế hoạch sản xuất cuối ngày.
 
-- **Endpoint**: `POST http://[Server_IP]:5600/api/webhook?token=wh_tok_2f8d9b1e4c7a6e5b3d2c1f0a9e8d7c6b`
+- **Endpoint**: `POST http://[Server_IP]:5600/api/webhook?token=<WEBHOOK_TOKEN>`
 - **Content-Type**: `application/x-www-form-urlencoded`
 - **Các tham số Payload**:
 

@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  MẪU cấu hình runtime cho plugin SCADA (HinoTools.Data / HinoTools.Alarm).
+
+  CÁCH DÙNG khi triển khai:
+    1. Chép file này thành  scada-runtime.config
+    2. Đặt nó CẠNH file .exe của ATSCADA runtime (cùng thư mục với HinoTools.Data.dll).
+    3. Điền giá trị thật. KHÔNG commit file scada-runtime.config lên git (đã có trong .gitignore).
+
+  Có thể trỏ tới đường dẫn khác bằng biến môi trường SCADA_RUNTIME_CONFIG.
+
+  Quy tắc phân giải giá trị (HinoTools.Data.Config.ScadaConfig):
+    - Giá trị đặt tường minh trên component trong ATSCADA designer  ->  ưu tiên cao nhất
+    - Rồi tới file này
+    - Db.User và Db.Password KHÔNG có giá trị mặc định: thiếu cả hai nguồn thì hệ báo lỗi rõ ràng
+      (cố ý — không âm thầm đăng nhập bằng tài khoản đoán trước).
+-->
+<configuration>
+  <appSettings>
+    <!-- Kết nối MySQL -->
+    <add key="Db.Server" value="localhost" />
+    <add key="Db.Name" value="scada" />
+    <add key="Db.User" value="ĐIỀN_TÊN_TÀI_KHOẢN" />
+    <add key="Db.Password" value="ĐIỀN_MẬT_KHẨU" />
+
+    <!-- Token webhook Base.vn (đường /api/webhook, cổng 5605).
+         Rỗng = server webhook TỪ CHỐI khởi động (không mở cổng không xác thực). -->
+    <add key="Api.WebhookToken" value="ĐIỀN_TOKEN_WEBHOOK_MỚI" />
+
+    <!-- Token Read API cho MES (cổng 5500).
+         Rỗng = server Read API TỪ CHỐI khởi động. -->
+    <add key="Api.ReadApiToken" value="ĐIỀN_TOKEN_READ_API_MỚI" />
+  </appSettings>
+</configuration>

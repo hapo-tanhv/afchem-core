@@ -14,14 +14,19 @@ namespace HinoTools.Data.Http
         private HttpListener listener;
         private string connectionString;
         private bool isRunning;
-        private const string DefaultDevice = "TX01";
         private readonly object dbLock = new object();
         private int serverPort;
+        private string securityToken;
+        private string reportTableName;
 
-        public BatchesHttpServer(string connectionString, int port = 5500)
+        public bool IsRunning => isRunning;
+
+        public BatchesHttpServer(string connectionString, int port = 5500, string token = null, string reportTable = "alarmreport")
         {
             this.connectionString = connectionString;
             this.serverPort = port;
+            this.securityToken = token;
+            this.reportTableName = string.IsNullOrEmpty(reportTable) ? "alarmreport" : reportTable;
             listener = new HttpListener();
             // Listen on port from any source IP
             listener.Prefixes.Add($"http://*:{port}/");
@@ -30,6 +35,19 @@ namespace HinoTools.Data.Http
         public void Start()
         {
             if (isRunning) return;
+
+            // Đợt 3B: KHÔNG mở cổng khi chưa có token.
+            // Server này phục vụ cả đường GHI (POST /api/batches/create), nên "không có token"
+            // phải nghĩa là TỪ CHỐI CHẠY, chứ không phải "chạy mà không cần xác thực".
+            if (string.IsNullOrEmpty(securityToken))
+            {
+                string msg = $"[BatchesHttpServer] TỪ CHỐI KHỞI ĐỘNG trên cổng {serverPort}: chưa cấu hình token " +
+                             $"(khoá Api.ReadApiToken trong scada-runtime.config). Không mở cổng không xác thực.";
+                System.Diagnostics.Debug.WriteLine(msg);
+                LogSystemError(msg);
+                return;
+            }
+
             isRunning = true;
             try
             {
@@ -121,13 +139,28 @@ namespace HinoTools.Data.Http
             // Enable CORS by default
             response.Headers.Add("Access-Control-Allow-Origin", "*");
             response.Headers.Add("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
-            response.Headers.Add("Access-Control-Allow-Headers", "Content-Type, Accept");
+            response.Headers.Add("Access-Control-Allow-Headers", "Content-Type, Accept, X-Api-Token");
 
             // Handle pre-flight OPTIONS request
             if (request.HttpMethod == "OPTIONS")
             {
                 response.StatusCode = (int)HttpStatusCode.OK;
                 response.Close();
+                return;
+            }
+
+            // Đợt 3B: xác thực token cho MỌI endpoint (X-Api-Token header hoặc ?token=).
+            // Server không khởi động khi thiếu token nên tới đây securityToken luôn khác rỗng.
+            string requestToken = request.Headers["X-Api-Token"];
+            if (string.IsNullOrEmpty(requestToken))
+            {
+                requestToken = request.QueryString["token"];
+            }
+
+            if (string.IsNullOrEmpty(requestToken) || !FixedTimeEquals(requestToken, securityToken))
+            {
+                string errorJson = "{\n  \"success\": false,\n  \"message\": \"Unauthorized. Thiếu hoặc sai API token.\"\n}";
+                SendJsonResponse(response, HttpStatusCode.Unauthorized, errorJson);
                 return;
             }
 
@@ -142,7 +175,9 @@ namespace HinoTools.Data.Http
                     }
 
                     // Parse device_name from JSON
-                    string deviceName = DefaultDevice;
+                    // Đợt 3B: KHÔNG còn mặc định "TX01". Không nêu rõ máy thì từ chối,
+                    // vì đoán máy nghĩa là gán sai dữ liệu sản xuất cho một máy có thật.
+                    string deviceName = "";
                     var match = Regex.Match(body, "\"device_name\"\\s*:\\s*\"([^\"]+)\"", RegexOptions.IgnoreCase);
                     if (match.Success)
                     {
@@ -160,7 +195,20 @@ namespace HinoTools.Data.Http
 
                     if (string.IsNullOrEmpty(deviceName))
                     {
-                        deviceName = DefaultDevice;
+                        string errorJson = "{\n  \"success\": false,\n  \"message\": \"Thiếu tham số device_name. " +
+                                           "Phải nêu rõ máy sản xuất, hệ không tự đoán máy.\"\n}";
+                        SendJsonResponse(response, HttpStatusCode.BadRequest, errorJson);
+                        return;
+                    }
+
+                    // Máy phải có trong bảng machines (nạp từ danh mục máy của Core).
+                    string machineError;
+                    if (!Helper.MachineRegistry.IsKnownDevice(connectionString, deviceName, out machineError))
+                    {
+                        string errorJson = "{\n  \"success\": false,\n  \"message\": \"" +
+                                           EscapeJsonString(machineError) + "\"\n}";
+                        SendJsonResponse(response, HttpStatusCode.BadRequest, errorJson);
+                        return;
                     }
 
                     // Parse quantity (default is 1 for creation via this new workflow)
@@ -337,9 +385,42 @@ namespace HinoTools.Data.Http
 
                     SendJsonResponse(response, HttpStatusCode.OK, jsonResponse);
                 }
+                else if (request.HttpMethod == "GET" && Regex.IsMatch(request.Url.AbsolutePath, "^/api/batches/by-lot/.+$", RegexOptions.IgnoreCase))
+                {
+                    // Đợt 3B — hợp đồng đọc cho MES: tra lô theo MÃ HIỂN THỊ.
+                    // MES dùng mã lô chính thức (custom_lotno / BAT-), KHÔNG dùng id auto-increment
+                    // của SCADA (id là chi tiết nội bộ, không phải định danh nghiệp vụ).
+                    string rawLot = request.Url.AbsolutePath.Substring("/api/batches/by-lot/".Length).TrimEnd('/');
+                    string lotCode = WebUtility.UrlDecode(rawLot);
+
+                    string batchJson = null;
+                    lock (dbLock)
+                    {
+                        using (var conn = new MySqlConnection(connectionString))
+                        {
+                            conn.Open();
+                            EnsureBatchesTableExists(conn);
+                            batchJson = BuildBatchJsonByLotCode(conn, lotCode);
+                        }
+                    }
+
+                    if (batchJson == null)
+                    {
+                        SendJsonResponse(response, HttpStatusCode.NotFound,
+                            "{\n  \"success\": false,\n  \"message\": \"Không tìm thấy lô với mã lô chính thức '" +
+                            EscapeJsonString(lotCode) + "'.\"\n}");
+                    }
+                    else
+                    {
+                        SendJsonResponse(response, HttpStatusCode.OK,
+                            "{\n  \"success\": true,\n  \"data\":\n" + batchJson + "\n}");
+                    }
+                }
                 else if (request.HttpMethod == "GET" && request.Url.AbsolutePath.Equals("/api/batches", StringComparison.OrdinalIgnoreCase))
                 {
                     string deviceName = request.QueryString["device_name"];
+                    string lotCodeFilter = request.QueryString["lot_code"];
+                    string mcCodeFilter = request.QueryString["mc_code"];
                     int limit = 50;
                     var limitStr = request.QueryString["limit"];
                     if (!string.IsNullOrEmpty(limitStr))
@@ -356,45 +437,33 @@ namespace HinoTools.Data.Http
                             conn.Open();
                             EnsureBatchesTableExists(conn);
 
-                            string selectQuery = "SELECT `id`, `name`, `device_name`, `status`, `total_runs`, `start_time`, `end_time`, `created_at` FROM `batches` ";
-                            if (!string.IsNullOrEmpty(deviceName))
-                            {
-                                selectQuery += "WHERE `device_name` = @device_name ";
-                            }
-                            selectQuery += "ORDER BY `id` DESC LIMIT @limit";
+                            // Đợt 3B: join sang machines để trả mã máy MC- của Core,
+                            // và trả official_lot_code tách bạch khỏi mã phiên chạy máy.
+                            string selectQuery =
+                                "SELECT b.`id`, b.`name`, b.`official_lot_code`, b.`device_name`, m.`mc_code`, " +
+                                "       b.`status`, b.`total_runs`, b.`start_time`, b.`end_time`, b.`created_at` " +
+                                "FROM `batches` b LEFT JOIN `machines` m ON m.`device_name` = b.`device_name` ";
+
+                            var where = new System.Collections.Generic.List<string>();
+                            if (!string.IsNullOrEmpty(deviceName)) where.Add("b.`device_name` = @device_name");
+                            if (!string.IsNullOrEmpty(lotCodeFilter)) where.Add("b.`official_lot_code` = @lot_code");
+                            if (!string.IsNullOrEmpty(mcCodeFilter)) where.Add("m.`mc_code` = @mc_code");
+                            if (where.Count > 0) selectQuery += "WHERE " + string.Join(" AND ", where) + " ";
+
+                            selectQuery += "ORDER BY b.`id` DESC LIMIT @limit";
 
                             using (var cmd = new MySqlCommand(selectQuery, conn))
                             {
-                                if (!string.IsNullOrEmpty(deviceName))
-                                {
-                                    cmd.Parameters.AddWithValue("@device_name", deviceName);
-                                }
+                                if (!string.IsNullOrEmpty(deviceName)) cmd.Parameters.AddWithValue("@device_name", deviceName);
+                                if (!string.IsNullOrEmpty(lotCodeFilter)) cmd.Parameters.AddWithValue("@lot_code", lotCodeFilter);
+                                if (!string.IsNullOrEmpty(mcCodeFilter)) cmd.Parameters.AddWithValue("@mc_code", mcCodeFilter);
                                 cmd.Parameters.AddWithValue("@limit", limit);
 
                                 using (var reader = cmd.ExecuteReader())
                                 {
                                     while (reader.Read())
                                     {
-                                        int id = reader.GetInt32(0);
-                                        string name = reader.GetString(1);
-                                        string devName = reader.GetString(2);
-                                        string status = reader.GetString(3);
-                                        int totalRuns = reader.GetInt32(4);
-                                        string startTime = reader.IsDBNull(5) ? "null" : $"\"{reader.GetDateTime(5):yyyy-MM-dd HH:mm:ss}\"";
-                                        string endTime = reader.IsDBNull(6) ? "null" : $"\"{reader.GetDateTime(6):yyyy-MM-dd HH:mm:ss}\"";
-                                        string createdAt = reader.GetDateTime(7).ToString("yyyy-MM-dd HH:mm:ss");
-
-                                        string item = $"{{\n" +
-                                                      $"      \"id\": {id},\n" +
-                                                      $"      \"name\": \"{name}\",\n" +
-                                                      $"      \"device_name\": \"{devName}\",\n" +
-                                                      $"      \"status\": \"{status}\",\n" +
-                                                      $"      \"total_runs\": {totalRuns},\n" +
-                                                      $"      \"start_time\": {startTime},\n" +
-                                                      $"      \"end_time\": {endTime},\n" +
-                                                      $"      \"created_at\": \"{createdAt}\"\n" +
-                                                      $"    }}";
-                                        batchList.Add(item);
+                                        batchList.Add(BuildBatchSummaryJson(reader, "      "));
                                     }
                                 }
                             }
@@ -436,9 +505,10 @@ namespace HinoTools.Data.Http
                                         string name = reader.GetString(3);
                                         string status = reader.GetString(4);
                                         int execOrder = reader.GetInt32(5);
-                                        string startTime = reader.IsDBNull(6) ? "null" : $"\"{reader.GetDateTime(6):yyyy-MM-dd HH:mm:ss}\"";
-                                        string endTime = reader.IsDBNull(7) ? "null" : $"\"{reader.GetDateTime(7):yyyy-MM-dd HH:mm:ss}\"";
-                                        string createdAt = reader.GetDateTime(8).ToString("yyyy-MM-dd HH:mm:ss");
+                                        // Đợt 3B: thời gian đối ngoại luôn ISO 8601 kèm offset +07:00
+                                        string startTime = reader.IsDBNull(6) ? "null" : $"\"{Helper.TimeFormat.ToIso8601(reader.GetDateTime(6))}\"";
+                                        string endTime = reader.IsDBNull(7) ? "null" : $"\"{Helper.TimeFormat.ToIso8601(reader.GetDateTime(7))}\"";
+                                        string createdAt = Helper.TimeFormat.ToIso8601(reader.GetDateTime(8));
 
                                         string item = $"{{\n" +
                                                       $"      \"id\": {id},\n" +
@@ -502,6 +572,15 @@ namespace HinoTools.Data.Http
         }
 
         private void EnsureBatchesTableExists(MySqlConnection conn)
+        {
+            EnsureBatchesTableExistsCore(conn);
+
+            // Đợt 3B: bảng machines + cột official_lot_code phải có mặt kể cả khi
+            // Read API khởi động TRƯỚC khi có webhook nào chạy (nếu không sẽ lỗi 500 với MES).
+            Db.SchemaMigrator.EnsureDot3BSchema(conn);
+        }
+
+        private void EnsureBatchesTableExistsCore(MySqlConnection conn)
         {
             string createTableSql = "CREATE TABLE IF NOT EXISTS `batches` (" +
                                     "  `id` INT AUTO_INCREMENT PRIMARY KEY," +
@@ -618,6 +697,147 @@ namespace HinoTools.Data.Http
         {
             if (string.IsNullOrEmpty(s)) return "";
             return s.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\n", "\\n").Replace("\r", "\\r").Replace("\t", "\\t");
+        }
+
+        /// <summary>Chuỗi JSON cho một giá trị text: "giá trị" hoặc null.</summary>
+        private static string JsonText(object value)
+        {
+            if (value == null || value == DBNull.Value) return "null";
+            return "\"" + EscapeJsonString(Convert.ToString(value)) + "\"";
+        }
+
+        /// <summary>
+        /// Đợt 3B: một dòng tóm tắt lô cho hệ ngoài.
+        ///
+        /// Ba mã được trả TÁCH BẠCH để không ai nhầm nữa:
+        ///   - official_lot_code    : MÃ LÔ nghiệp vụ (từ Base/MES) — đây là thứ MES dùng
+        ///   - machine_session_code : mã phiên chạy máy kỹ thuật (batches.name) — KHÔNG phải mã lô
+        ///   - mc_code              : mã máy của Core
+        /// Trường "name" và "id" được giữ lại để bên gọi cũ không vỡ.
+        /// </summary>
+        private static string BuildBatchSummaryJson(MySqlDataReader reader, string indent)
+        {
+            return BuildBatchSummaryJson(reader, indent, false);
+        }
+
+        /// <summary>
+        /// <paramref name="leaveOpen"/> = true: bỏ dấu ngoặc đóng và thêm dấu phẩy,
+        /// để người gọi nối thêm thuộc tính (ví dụ mảng "runs").
+        /// </summary>
+        private static string BuildBatchSummaryJson(MySqlDataReader reader, string indent, bool leaveOpen)
+        {
+            int id = reader.GetInt32(0);
+            string name = reader.IsDBNull(1) ? "" : reader.GetString(1);
+            object officialLot = reader.IsDBNull(2) ? null : reader.GetValue(2);
+            string devName = reader.IsDBNull(3) ? "" : reader.GetString(3);
+            object mcCode = reader.IsDBNull(4) ? null : reader.GetValue(4);
+            string status = reader.IsDBNull(5) ? "" : reader.GetString(5);
+            int totalRuns = reader.IsDBNull(6) ? 0 : reader.GetInt32(6);
+            string startTime = reader.IsDBNull(7) ? "null" : "\"" + Helper.TimeFormat.ToIso8601(reader.GetDateTime(7)) + "\"";
+            string endTime = reader.IsDBNull(8) ? "null" : "\"" + Helper.TimeFormat.ToIso8601(reader.GetDateTime(8)) + "\"";
+            string createdAt = reader.IsDBNull(9) ? "null" : "\"" + Helper.TimeFormat.ToIso8601(reader.GetDateTime(9)) + "\"";
+
+            return indent + "{\n" +
+                   indent + "  \"official_lot_code\": " + JsonText(officialLot) + ",\n" +
+                   indent + "  \"machine_session_code\": " + JsonText(name) + ",\n" +
+                   indent + "  \"mc_code\": " + JsonText(mcCode) + ",\n" +
+                   indent + "  \"device_name\": " + JsonText(devName) + ",\n" +
+                   indent + "  \"status\": " + JsonText(status) + ",\n" +
+                   indent + "  \"total_runs\": " + totalRuns + ",\n" +
+                   indent + "  \"start_time\": " + startTime + ",\n" +
+                   indent + "  \"end_time\": " + endTime + ",\n" +
+                   indent + "  \"created_at\": " + createdAt + ",\n" +
+                   indent + "  \"id\": " + id + ",\n" +
+                   indent + "  \"name\": " + JsonText(name) + "\n" +
+                   (leaveOpen ? indent + "  ," : indent + "}");
+        }
+
+        /// <summary>
+        /// Chi tiết một lô tra theo mã lô chính thức: header + các mẻ + BOM từng mẻ.
+        /// Trả null nếu không có lô nào mang mã đó.
+        /// </summary>
+        private string BuildBatchJsonByLotCode(MySqlConnection conn, string lotCode)
+        {
+            int batchId = -1;
+            var sb = new StringBuilder();
+
+            const string headerSql =
+                "SELECT b.`id`, b.`name`, b.`official_lot_code`, b.`device_name`, m.`mc_code`, " +
+                "       b.`status`, b.`total_runs`, b.`start_time`, b.`end_time`, b.`created_at` " +
+                "FROM `batches` b LEFT JOIN `machines` m ON m.`device_name` = b.`device_name` " +
+                "WHERE b.`official_lot_code` = @lot LIMIT 1";
+
+            using (var cmd = new MySqlCommand(headerSql, conn))
+            {
+                cmd.Parameters.AddWithValue("@lot", lotCode);
+                using (var reader = cmd.ExecuteReader())
+                {
+                    if (!reader.Read()) return null;
+                    batchId = reader.GetInt32(0);
+                    sb.Append(BuildBatchSummaryJson(reader, "  ", true));
+                }
+            }
+
+            sb.Append("\n  \"runs\": [\n");
+
+            var runIds = new System.Collections.Generic.List<int>();
+            var runJsons = new System.Collections.Generic.List<string>();
+
+            using (var cmd = new MySqlCommand(
+                "SELECT `id`, `name`, `run_number`, `status`, `start_time`, `end_time` " +
+                "FROM `runs` WHERE `batch_id` = @id ORDER BY `run_number` ASC", conn))
+            {
+                cmd.Parameters.AddWithValue("@id", batchId);
+                using (var reader = cmd.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        runIds.Add(reader.GetInt32(0));
+                        string runStart = reader.IsDBNull(4) ? "null" : "\"" + Helper.TimeFormat.ToIso8601(reader.GetDateTime(4)) + "\"";
+                        string runEnd = reader.IsDBNull(5) ? "null" : "\"" + Helper.TimeFormat.ToIso8601(reader.GetDateTime(5)) + "\"";
+
+                        runJsons.Add(
+                            "    {\n" +
+                            "      \"run_name\": " + JsonText(reader.IsDBNull(1) ? null : reader.GetValue(1)) + ",\n" +
+                            "      \"run_number\": " + (reader.IsDBNull(2) ? 0 : reader.GetInt32(2)) + ",\n" +
+                            "      \"status\": " + JsonText(reader.IsDBNull(3) ? null : reader.GetValue(3)) + ",\n" +
+                            "      \"start_time\": " + runStart + ",\n" +
+                            "      \"end_time\": " + runEnd + "\n" +
+                            "    }");
+                    }
+                }
+            }
+
+            sb.Append(string.Join(",\n", runJsons));
+            sb.Append("\n  ]\n}");
+            return sb.ToString();
+        }
+
+        /// <summary>
+        /// So sánh chuỗi với thời gian chạy không phụ thuộc vị trí ký tự khác nhau,
+        /// tránh rò rỉ thông tin token qua đo thời gian phản hồi.
+        /// </summary>
+        private static bool FixedTimeEquals(string a, string b)
+        {
+            if (a == null || b == null) return false;
+
+            int diff = a.Length ^ b.Length;
+            for (int i = 0; i < a.Length && i < b.Length; i++)
+            {
+                diff |= a[i] ^ b[i];
+            }
+            return diff == 0;
+        }
+
+        private void LogSystemError(string errorMessage)
+        {
+            try
+            {
+                string logFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "batches_api_errors.log");
+                string logContent = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {errorMessage}{Environment.NewLine}";
+                File.AppendAllText(logFilePath, logContent);
+            }
+            catch { }
         }
     }
 }

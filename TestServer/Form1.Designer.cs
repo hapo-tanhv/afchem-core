@@ -1,4 +1,4 @@
-﻿
+
 namespace TestServer
 {
     partial class Form1
@@ -65,7 +65,7 @@ namespace TestServer
             this.eventServer1.DatabaseName = "scada";
             this.eventServer1.Driver = null;
             this.eventServer1.Limit = 200;
-            this.eventServer1.Password = "101101";
+            this.eventServer1.Password = "";
             this.eventServer1.ServerName = "localhost";
             this.eventServer1.TableLog = "eventlog";
             this.eventServer1.TableName = "eventsettings";
@@ -76,7 +76,7 @@ namespace TestServer
             this.alarmServer1.DatabaseName = "scada";
             this.alarmServer1.Driver = this.iDriver1;
             this.alarmServer1.Limit = 200;
-            this.alarmServer1.Password = "101101";
+            this.alarmServer1.Password = "";
             this.alarmServer1.ServerName = "localhost";
             this.alarmServer1.TableLog = "alarmlog";
             this.alarmServer1.TableName = "alarmsettings";
@@ -92,7 +92,7 @@ namespace TestServer
             // 
             this.alarmLogger1.AlarmHub = this.alarmServer1;
             this.alarmLogger1.DatabaseName = "scada";
-            this.alarmLogger1.Password = "101101";
+            this.alarmLogger1.Password = "";
             this.alarmLogger1.ServerName = "localhost";
             this.alarmLogger1.TableName = "alarmlog";
             this.alarmLogger1.UserID = "root";
@@ -101,7 +101,7 @@ namespace TestServer
             // 
             this.eventLogger1.AlarmHub = this.eventServer1;
             this.eventLogger1.DatabaseName = "scada";
-            this.eventLogger1.Password = "101101";
+            this.eventLogger1.Password = "";
             this.eventLogger1.ServerName = "localhost";
             this.eventLogger1.TableName = "eventlog";
             this.eventLogger1.UserID = "root";

@@ -110,7 +110,7 @@ Chọn từng component ở Component Tray → mở **Properties Window** (`F4`)
 | `Driver` | `iDriver1` | ← chọn từ dropdown |
 | `ServerName` | `localhost` | |
 | `UserID` | `root` | |
-| `Password` | `101101` | ← kiểm tra password MySQL của bạn |
+| `Password` | `<MAT_KHAU>` | ← kiểm tra password MySQL của bạn |
 | `DatabaseName` | `scada` | |
 | `TableName` | `alarmreport` | |
 | `PollingInterval` | `30000` | 30 giây (mặc định) |
@@ -145,7 +145,7 @@ AFChemTX01.NhietDoBonTronDuoi;NhietDoBonTronDuoi
 | `Driver` | `iDriver1` | ← chọn từ dropdown |
 | `ServerName` | `localhost` | |
 | `UserID` | `root` | |
-| `Password` | `101101` | |
+| `Password` | `<MAT_KHAU>` | |
 | `DatabaseName` | `scada` | |
 | `TableName` | `realtime_alarms` | |
 | `ScanInterval` | `3000` | 3 giây (mặc định) |
@@ -171,7 +171,7 @@ AFChemTX01.ApSuat;ApSuat;10;<
 | `Driver` | `iDriver1` |
 | `ServerName` | `localhost` |
 | `UserID` | `root` |
-| `Password` | `101101` |
+| `Password` | `<MAT_KHAU>` |
 | `DatabaseName` | `scada` |
 | `TableName` | `alarmsettings` |
 | `TableLog` | `alarmlog` |
@@ -183,7 +183,7 @@ AFChemTX01.ApSuat;ApSuat;10;<
 | `AlarmHub` | `alarmServer1` |
 | `ServerName` | `localhost` |
 | `UserID` | `root` |
-| `Password` | `101101` |
+| `Password` | `<MAT_KHAU>` |
 | `DatabaseName` | `scada` |
 | `TableName` | `alarmlog` |
 

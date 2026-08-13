@@ -48,7 +48,31 @@ namespace HinoTools.Alarm.Server
         public string UserID { get; set; } = "root";
 
         [Category("Hino Settings")]
-        public string Password { get; set; } = "101101";
+        public string Password { get; set; } = "";
+
+        // --- Đợt 3B: thông tin đăng nhập MySQL không còn nhúng trong mã nguồn. ---
+        // Ưu tiên giá trị đặt tường minh trên component (ATSCADA designer), sau đó tới
+        // file scada-runtime.config. Thiếu cả hai với user/mật khẩu => báo lỗi rõ ràng
+        // thay vì âm thầm dùng tài khoản mặc định. Xem HinoTools.Data.Config.ScadaConfig.
+        private string DbServer
+        {
+            get { return HinoTools.Data.Config.ScadaConfig.ResolveOptional(ServerName, HinoTools.Data.Config.ScadaConfig.KeyDbServer, "localhost"); }
+        }
+
+        private string DbUser
+        {
+            get { return HinoTools.Data.Config.ScadaConfig.Resolve(UserID, HinoTools.Data.Config.ScadaConfig.KeyDbUser); }
+        }
+
+        private string DbPassword
+        {
+            get { return HinoTools.Data.Config.ScadaConfig.Resolve(Password, HinoTools.Data.Config.ScadaConfig.KeyDbPassword); }
+        }
+
+        private string DbName
+        {
+            get { return HinoTools.Data.Config.ScadaConfig.ResolveOptional(DatabaseName, HinoTools.Data.Config.ScadaConfig.KeyDbName, "scada"); }
+        }
 
         [Category("Hino Settings")]
         public string DatabaseName { get; set; } = "scada";
@@ -100,7 +124,7 @@ namespace HinoTools.Alarm.Server
         {
             this.dataAccess = new DataAccess();
             this.dataAccess.ConnectionString =
-                $"Server={ServerName};Database={DatabaseName};Uid={UserID};Pwd={Password};";
+                $"Server={DbServer};Database={DbName};Uid={DbUser};Pwd={DbPassword};CharSet=utf8;";
 
             try
             {
