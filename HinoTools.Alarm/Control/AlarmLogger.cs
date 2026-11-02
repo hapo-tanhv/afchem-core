@@ -385,8 +385,15 @@ namespace HinoTools.Alarm.Control
                     string batchStatus = dt.Rows[0]["batch_status"].ToString();
 
                     // Update run to Active
-                    string updateRun = $"UPDATE `runs` SET `status` = 'Active', `start_time` = '{nowStr}', `is_paused` = 0 WHERE `id` = {runId}";
-                    this.dataAccess.ExecuteNonQuery(updateRun);
+                    string updateRun = $"UPDATE `runs` SET `status` = 'Active', `start_time` = '{nowStr}', `is_paused` = 0 WHERE `id` = {runId} AND `status` = 'Pending'";
+                    if (this.dataAccess.ExecuteNonQuery(updateRun) == 0)
+                    {
+                        // Run vừa bị huỷ từ MES sau lúc đọc hàng chờ: bỏ qua, chu kỳ sau tìm lại.
+                        WriteDebugLog(string.Format("[GetActiveBatchAndRunId] Run ID {0} không còn Pending, bỏ qua.", runId));
+                        runId = null;
+                        batchId = null;
+                        return;
+                    }
 
                     // Update batch to Active if Pending or start_time is null
                     bool shouldUpdateBatch = batchStatus == "Pending" || dt.Rows[0]["batch_start_time"] == DBNull.Value;

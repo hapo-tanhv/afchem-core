@@ -1721,7 +1721,10 @@ namespace HinoTools.Data.Log
                 string migrateRunsSql = "INSERT INTO `runs` (`batch_id`, `run_number`, `name`, `status`, `start_time`, `end_time`, `created_at`) " +
                                         "SELECT b.id, 1, CONCAT(b.name, '-Me01'), b.status, b.start_time, b.end_time, b.created_at " +
                                         "FROM `batches` b " +
-                                        "WHERE NOT EXISTS (SELECT 1 FROM `runs` r WHERE r.batch_id = b.id)";
+                                        "WHERE NOT EXISTS (SELECT 1 FROM `runs` r WHERE r.batch_id = b.id) " +
+                                        // Lô Pending chưa có run là webhook đang tạo nền: tạo chen ở đây sẽ đâm
+                                        // UNIQUE tên run và làm webhook mất BOM. Lô đã huỷ thì không cần run.
+                                        "AND b.status NOT IN ('Pending', 'Cancelled')";
                 int rows = dataAccess.ExecuteNonQuery(migrateRunsSql);
                 if (rows > 0)
                 {
@@ -1781,8 +1784,13 @@ namespace HinoTools.Data.Log
                     // Update this run to Active and set start_time
                     string updateRunQuery = $"UPDATE `runs` " +
                                             $"SET `status` = 'Active', `start_time` = '{DateTime.Now:yyyy-MM-dd HH:mm:ss}' " +
-                                            $"WHERE `id` = {runId}";
-                    dataAccess.ExecuteNonQuery(updateRunQuery);
+                                            $"WHERE `id` = {runId} AND `status` = 'Pending'";
+                    if (dataAccess.ExecuteNonQuery(updateRunQuery) == 0)
+                    {
+                        // Run vừa bị huỷ từ MES sau lúc đọc hàng chờ: bỏ qua, chu kỳ sau tìm lại.
+                        System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] Run ID {runId} không còn Pending, bỏ qua.");
+                        return;
+                    }
 
                     // Update parent batch to Active if it is still Pending or start_time is null
                     bool shouldUpdateBatch = batchStatus == "Pending" || dt.Rows[0]["batch_start_time"] == DBNull.Value;

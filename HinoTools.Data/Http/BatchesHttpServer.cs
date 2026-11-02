@@ -638,16 +638,27 @@ namespace HinoTools.Data.Http
                     return HttpStatusCode.NotFound;
                 }
 
+                // Khoá cả dòng run: máy nhận mẻ cùng lúc thì lệnh UPDATE của plugin chờ ở đây,
+                // rồi thấy run không còn Pending và bỏ qua.
+                bool started = false;
                 using (var cmd = new MySqlCommand(
-                    "SELECT COUNT(*) FROM `runs` r JOIN `batches` b ON b.`id` = r.`batch_id` " +
-                    "WHERE b.`official_lot_code` = @lot AND r.`status` IN ('Active', 'Completed')", conn, tx))
+                    "SELECT r.`status` FROM `runs` r JOIN `batches` b ON b.`id` = r.`batch_id` " +
+                    "WHERE b.`official_lot_code` = @lot FOR UPDATE", conn, tx))
                 {
                     cmd.Parameters.AddWithValue("@lot", lotCode);
-                    if (Convert.ToInt32(cmd.ExecuteScalar()) > 0)
+                    using (var reader = cmd.ExecuteReader())
                     {
-                        tx.Rollback();
-                        return HttpStatusCode.Conflict;
+                        while (reader.Read())
+                        {
+                            string status = reader.GetString(0);
+                            if (status == "Active" || status == "Completed") started = true;
+                        }
                     }
+                }
+                if (started)
+                {
+                    tx.Rollback();
+                    return HttpStatusCode.Conflict;
                 }
 
                 using (var cmd = new MySqlCommand(
@@ -804,7 +815,10 @@ namespace HinoTools.Data.Http
                 string migrateRunsSql = "INSERT INTO `runs` (`batch_id`, `run_number`, `name`, `status`, `start_time`, `end_time`, `created_at`) " +
                                         "SELECT b.id, 1, CONCAT(b.name, '-Me01'), b.status, b.start_time, b.end_time, b.created_at " +
                                         "FROM `batches` b " +
-                                        "WHERE NOT EXISTS (SELECT 1 FROM `runs` r WHERE r.batch_id = b.id)";
+                                        "WHERE NOT EXISTS (SELECT 1 FROM `runs` r WHERE r.batch_id = b.id) " +
+                                        // Lô Pending chưa có run là webhook đang tạo nền: tạo chen ở đây sẽ đâm
+                                        // UNIQUE tên run và làm webhook mất BOM. Lô đã huỷ thì không cần run.
+                                        "AND b.status NOT IN ('Pending', 'Cancelled')";
                 using (var cmd = new MySqlCommand(migrateRunsSql, conn))
                 {
                     int rows = cmd.ExecuteNonQuery();
