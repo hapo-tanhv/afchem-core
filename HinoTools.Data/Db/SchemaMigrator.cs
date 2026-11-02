@@ -23,6 +23,7 @@ namespace HinoTools.Data.Db
         {
             EnsureMachinesTable(conn);
             EnsureOfficialLotCodeColumn(conn);
+            EnsureProductLotCodeColumn(conn);
         }
 
         private static void EnsureMachinesTable(MySqlConnection conn)
@@ -69,6 +70,30 @@ namespace HinoTools.Data.Db
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"[SchemaMigrator] LỖI thêm cột official_lot_code: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Mã lô thành phẩm từ MES (AFC-FG-…), tách khỏi official_lot_code là mã mẻ BAT-.
+        /// Khớp db/migrations/2026-11-03-mes-dispatch.sql.
+        /// </summary>
+        private static void EnsureProductLotCodeColumn(MySqlConnection conn)
+        {
+            try
+            {
+                if (ColumnExists(conn, "batches", "product_lot_code")) return;
+
+                using (var cmd = new MySqlCommand(
+                    "ALTER TABLE `batches` ADD COLUMN `product_lot_code` VARCHAR(100) NULL " +
+                    "COMMENT 'Mã lô thành phẩm từ MES' AFTER `official_lot_code`", conn))
+                {
+                    cmd.ExecuteNonQuery();
+                }
+                System.Diagnostics.Debug.WriteLine("[SchemaMigrator] Đã thêm cột batches.product_lot_code.");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[SchemaMigrator] LỖI thêm cột product_lot_code: {ex.Message}");
             }
         }
 

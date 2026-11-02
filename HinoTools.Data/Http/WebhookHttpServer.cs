@@ -336,50 +336,9 @@ namespace HinoTools.Data.Http
                     if (paramsDict.ContainsKey("custom_cong_thuc")) formula = paramsDict["custom_cong_thuc"].Trim();
                     else if (paramsDict.ContainsKey("cong_thuc")) formula = paramsDict["cong_thuc"].Trim();
 
-                    // Đợt 3B: mã lô chính thức phải duy nhất. Trùng mã => từ chối,
-                    // KHÔNG tự thêm hậu tố: mã nghiệp vụ do Base/MES quản lý,
-                    // SCADA không được chế biến nó.
-                    if (!string.IsNullOrEmpty(officialLotCode))
-                    {
-                        string duplicateOfBatchName = null;
-                        try
-                        {
-                            lock (dbLock)
-                            {
-                                using (var connDup = new MySqlConnection(connectionString))
-                                {
-                                    connDup.Open();
-                                    EnsureWebhookTableExists(connDup);
-
-                                    using (var cmdDup = new MySqlCommand(
-                                        "SELECT `name` FROM `batches` WHERE `official_lot_code` = @lot LIMIT 1", connDup))
-                                    {
-                                        cmdDup.Parameters.AddWithValue("@lot", officialLotCode);
-                                        var existing = cmdDup.ExecuteScalar();
-                                        if (existing != null && existing != DBNull.Value)
-                                        {
-                                            duplicateOfBatchName = existing.ToString();
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            string errorResponse = $"{{\n  \"success\": false,\n  \"message\": \"Không kiểm tra được trùng mã lô: {EscapeJsonString(ex.Message)}\"\n}}";
-                            UpdateWebhookStatus(logId, "Failed", "Lỗi kiểm tra trùng mã lô: " + ex.Message);
-                            SendJsonResponse(response, HttpStatusCode.InternalServerError, errorResponse);
-                            return;
-                        }
-
-                        if (duplicateOfBatchName != null)
-                        {
-                            string errorResponse = $"{{\n  \"success\": false,\n  \"message\": \"Mã lô chính thức '{EscapeJsonString(officialLotCode)}' đã tồn tại (phiên chạy máy '{EscapeJsonString(duplicateOfBatchName)}'). Không tạo lô trùng mã.\"\n}}";
-                            UpdateWebhookStatus(logId, "Failed", $"Trùng mã lô chính thức '{officialLotCode}'");
-                            SendJsonResponse(response, HttpStatusCode.Conflict, errorResponse);
-                            return;
-                        }
-                    }
+                    string productLotCode = "";
+                    if (paramsDict.ContainsKey("custom_ma_lo_thanh_pham")) productLotCode = paramsDict["custom_ma_lo_thanh_pham"].Trim();
+                    else if (paramsDict.ContainsKey("ma_lo_thanh_pham")) productLotCode = paramsDict["ma_lo_thanh_pham"].Trim();
 
                     // Synchronously create batch under DB Lock to ensure correct sequence (STT)
                     string batchName = "";
@@ -392,6 +351,45 @@ namespace HinoTools.Data.Http
                             {
                                 conn.Open();
                                 EnsureWebhookTableExists(conn);
+
+                                // Mã lô chính thức phải duy nhất trong các mẻ chưa huỷ. Đẩy lại cùng mã
+                                // (MES bấm lại sau lỗi mạng) trả mẻ cũ, không sinh mẻ mới; mẻ đã huỷ
+                                // không tính nên đẩy lại sau khi huỷ vẫn tạo được mẻ mới.
+                                // Kiểm trong cùng lock với lệnh INSERT để hai lần đẩy đồng thời
+                                // không lọt qua nhau. KHÔNG tự thêm hậu tố vào mã nghiệp vụ.
+                                if (!string.IsNullOrEmpty(officialLotCode))
+                                {
+                                    string existingName = null;
+                                    string existingStatus = null;
+                                    using (var cmdDup = new MySqlCommand(
+                                        "SELECT `name`, `status` FROM `batches` " +
+                                        "WHERE `official_lot_code` = @lot AND `status` <> 'Cancelled' " +
+                                        "ORDER BY `id` DESC LIMIT 1", conn))
+                                    {
+                                        cmdDup.Parameters.AddWithValue("@lot", officialLotCode);
+                                        using (var readerDup = cmdDup.ExecuteReader())
+                                        {
+                                            if (readerDup.Read())
+                                            {
+                                                existingName = readerDup.GetString(0);
+                                                existingStatus = readerDup.GetString(1);
+                                            }
+                                        }
+                                    }
+
+                                    if (existingName != null)
+                                    {
+                                        UpdateWebhookStatus(logId, "Duplicate", $"Trùng mã lô chính thức '{officialLotCode}', trả mẻ cũ '{existingName}'");
+                                        string duplicateJson = $"{{\n  \"success\": true,\n  \"message\": \"Batch already exists\",\n" +
+                                                               $"  \"duplicate\": true,\n" +
+                                                               $"  \"status\": \"{EscapeJsonString(existingStatus)}\",\n" +
+                                                               $"  \"official_lot_code\": \"{EscapeJsonString(officialLotCode)}\",\n" +
+                                                               $"  \"machine_session_code\": \"{EscapeJsonString(existingName)}\",\n" +
+                                                               $"  \"batch_name\": \"{EscapeJsonString(existingName)}\"\n}}";
+                                        SendJsonResponse(response, HttpStatusCode.OK, duplicateJson);
+                                        return;
+                                    }
+                                }
 
                                 // Find next STT sequence for this device and production date (for fallback)
                                 int nextStt = 1;
@@ -464,13 +462,15 @@ namespace HinoTools.Data.Http
                                 // Insert the batch
                                 // Đợt 3B: `name` nay chỉ là MÃ PHIÊN CHẠY MÁY kỹ thuật;
                                 // mã lô nghiệp vụ nằm ở `official_lot_code`.
-                                string insertBatchQuery = "INSERT INTO `batches` (`name`, `official_lot_code`, `device_name`, `date`, `product_name`, `product_code`, `manufacturer`, `target_weight`, `formula`, `status`, `total_runs`, `created_at`) " +
-                                                           "VALUES (@name, @official_lot_code, @device_name, @date, @product_name, @product_code, @manufacturer, @target_weight, @formula, 'Pending', @total_runs, NOW())";
+                                string insertBatchQuery = "INSERT INTO `batches` (`name`, `official_lot_code`, `product_lot_code`, `device_name`, `date`, `product_name`, `product_code`, `manufacturer`, `target_weight`, `formula`, `status`, `total_runs`, `created_at`) " +
+                                                           "VALUES (@name, @official_lot_code, @product_lot_code, @device_name, @date, @product_name, @product_code, @manufacturer, @target_weight, @formula, 'Pending', @total_runs, NOW())";
                                 using (var cmd = new MySqlCommand(insertBatchQuery, conn))
                                 {
                                     cmd.Parameters.AddWithValue("@name", batchName);
                                     cmd.Parameters.AddWithValue("@official_lot_code",
                                         string.IsNullOrEmpty(officialLotCode) ? (object)DBNull.Value : officialLotCode);
+                                    cmd.Parameters.AddWithValue("@product_lot_code",
+                                        string.IsNullOrEmpty(productLotCode) ? (object)DBNull.Value : productLotCode);
                                     cmd.Parameters.AddWithValue("@device_name", deviceName);
                                     cmd.Parameters.AddWithValue("@date", prodDate.ToString("yyyy-MM-dd"));
                                     cmd.Parameters.AddWithValue("@product_name", productName);
@@ -501,6 +501,8 @@ namespace HinoTools.Data.Http
                     // machine_session_code là mã phiên chạy máy kỹ thuật (không phải mã lô).
                     // Giữ lại "batch_name" để bên gọi cũ không vỡ.
                     string successJson = $"{{\n  \"success\": true,\n  \"message\": \"Batch created successfully\",\n" +
+                                         $"  \"duplicate\": false,\n" +
+                                         $"  \"status\": \"Pending\",\n" +
                                          $"  \"official_lot_code\": \"{EscapeJsonString(officialLotCode)}\",\n" +
                                          $"  \"machine_session_code\": \"{EscapeJsonString(batchName)}\",\n" +
                                          $"  \"batch_name\": \"{EscapeJsonString(batchName)}\"\n}}";
@@ -636,15 +638,22 @@ namespace HinoTools.Data.Http
                             conn.Open();
                             EnsureWebhookTableExists(conn);
 
+                            // Mẻ chạy được tạo sau khi đã trả lời bên gọi, nên lệnh huỷ có thể tới trước.
+                            // Chỉ tạo khi lô chưa huỷ: run Pending sót lại sẽ bị máy ăn ở lần chạy kế tiếp.
                             string insertRunQuery = "INSERT INTO `runs` (`batch_id`, `run_number`, `name`, `status`, `execution_order`, `created_at`) " +
-                                                    "VALUES (@batch_id, @run_number, @name, 'Pending', @execution_order, NOW())";
+                                                    "SELECT @batch_id, @run_number, @name, 'Pending', @execution_order, NOW() " +
+                                                    "FROM `batches` WHERE `id` = @batch_id AND `status` <> 'Cancelled'";
                             using (var cmd = new MySqlCommand(insertRunQuery, conn))
                             {
                                 cmd.Parameters.AddWithValue("@batch_id", batchId);
                                 cmd.Parameters.AddWithValue("@run_number", r);
                                 cmd.Parameters.AddWithValue("@name", runName);
                                 cmd.Parameters.AddWithValue("@execution_order", currentExecutionOrder);
-                                cmd.ExecuteNonQuery();
+                                if (cmd.ExecuteNonQuery() == 0)
+                                {
+                                    UpdateWebhookStatus(logId, "Cancelled", "Lô đã huỷ trước khi tạo mẻ chạy");
+                                    return;
+                                }
                                 runId = (int)cmd.LastInsertedId;
                             }
                         }

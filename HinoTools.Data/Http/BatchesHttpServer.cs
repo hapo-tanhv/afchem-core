@@ -385,6 +385,10 @@ namespace HinoTools.Data.Http
 
                     SendJsonResponse(response, HttpStatusCode.OK, jsonResponse);
                 }
+                else if (request.HttpMethod == "POST" && request.Url.AbsolutePath.TrimEnd('/').Equals("/api/batches/cancel", StringComparison.OrdinalIgnoreCase))
+                {
+                    HandleCancelBatch(request, response);
+                }
                 else if (request.HttpMethod == "GET" && Regex.IsMatch(request.Url.AbsolutePath, "^/api/batches/by-lot/.+$", RegexOptions.IgnoreCase))
                 {
                     // Đợt 3B — hợp đồng đọc cho MES: tra lô theo MÃ HIỂN THỊ.
@@ -441,7 +445,7 @@ namespace HinoTools.Data.Http
                             // và trả official_lot_code tách bạch khỏi mã phiên chạy máy.
                             string selectQuery =
                                 "SELECT b.`id`, b.`name`, b.`official_lot_code`, b.`device_name`, m.`mc_code`, " +
-                                "       b.`status`, b.`total_runs`, b.`start_time`, b.`end_time`, b.`created_at` " +
+                                "       b.`status`, b.`total_runs`, b.`start_time`, b.`end_time`, b.`created_at`, b.`product_lot_code` " +
                                 "FROM `batches` b LEFT JOIN `machines` m ON m.`device_name` = b.`device_name` ";
 
                             var where = new System.Collections.Generic.List<string>();
@@ -543,6 +547,129 @@ namespace HinoTools.Data.Http
                 System.Diagnostics.Debug.WriteLine($"[BatchesHttpServer] ERROR processing request: {ex.Message}");
                 string jsonResponse = $"{{\n  \"success\": false,\n  \"message\": \"{EscapeJsonString(ex.Message)}\"\n}}";
                 SendJsonResponse(response, HttpStatusCode.InternalServerError, jsonResponse);
+            }
+        }
+
+        /// <summary>
+        /// Huỷ mẻ chờ theo mã lô chính thức (MES huỷ mẻ sau khi đã đẩy sang SCADA).
+        /// 200: đã huỷ hoặc trước đó đã huỷ rồi. 404: không có mã. 409: máy đã chạy mẻ này.
+        /// </summary>
+        private void HandleCancelBatch(HttpListenerRequest request, HttpListenerResponse response)
+        {
+            string body;
+            using (var reader = new StreamReader(request.InputStream, request.ContentEncoding))
+            {
+                body = reader.ReadToEnd();
+            }
+
+            string lotCode = "";
+            try
+            {
+                var json = new System.Web.Script.Serialization.JavaScriptSerializer()
+                    .DeserializeObject(body) as System.Collections.Generic.Dictionary<string, object>;
+                if (json != null && json.ContainsKey("official_lot_code"))
+                {
+                    lotCode = Convert.ToString(json["official_lot_code"]).Trim();
+                }
+            }
+            catch (ArgumentException)
+            {
+                // Body không phải JSON: rơi xuống nhánh thiếu mã bên dưới.
+            }
+
+            if (string.IsNullOrEmpty(lotCode))
+            {
+                SendJsonResponse(response, HttpStatusCode.BadRequest,
+                    "{\n  \"success\": false,\n  \"message\": \"Thiếu official_lot_code trong body JSON.\"\n}");
+                return;
+            }
+
+            int cancelledRuns = 0;
+            HttpStatusCode result;
+            lock (dbLock)
+            {
+                using (var conn = new MySqlConnection(connectionString))
+                {
+                    conn.Open();
+                    Db.SchemaMigrator.EnsureDot3BSchema(conn);
+                    result = CancelByLotCode(conn, lotCode, out cancelledRuns);
+                }
+            }
+
+            if (result == HttpStatusCode.NotFound)
+            {
+                SendJsonResponse(response, HttpStatusCode.NotFound,
+                    "{\n  \"success\": false,\n  \"message\": \"Không tìm thấy lô với mã lô chính thức '" +
+                    EscapeJsonString(lotCode) + "'.\"\n}");
+            }
+            else if (result == HttpStatusCode.Conflict)
+            {
+                SendJsonResponse(response, HttpStatusCode.Conflict,
+                    "{\n  \"success\": false,\n  \"message\": \"Mã lô '" + EscapeJsonString(lotCode) +
+                    "' đã có mẻ đang chạy hoặc đã xong trên máy, không huỷ được.\"\n}");
+            }
+            else
+            {
+                SendJsonResponse(response, HttpStatusCode.OK,
+                    "{\n  \"success\": true,\n  \"cancelled_runs\": " + cancelledRuns + "\n}");
+            }
+        }
+
+        private static HttpStatusCode CancelByLotCode(MySqlConnection conn, string lotCode, out int cancelledRuns)
+        {
+            cancelledRuns = 0;
+            using (var tx = conn.BeginTransaction())
+            {
+                // Khoá dòng lô trước: webhook tạo run sau khi đã trả lời, lệnh INSERT của nó
+                // phải chờ ở đây rồi thấy lô đã huỷ, không để run Pending lọt sau khi huỷ.
+                bool found = false;
+                using (var cmd = new MySqlCommand(
+                    "SELECT `id` FROM `batches` WHERE `official_lot_code` = @lot FOR UPDATE", conn, tx))
+                {
+                    cmd.Parameters.AddWithValue("@lot", lotCode);
+                    using (var reader = cmd.ExecuteReader())
+                    {
+                        found = reader.Read();
+                    }
+                }
+                if (!found)
+                {
+                    tx.Rollback();
+                    return HttpStatusCode.NotFound;
+                }
+
+                using (var cmd = new MySqlCommand(
+                    "SELECT COUNT(*) FROM `runs` r JOIN `batches` b ON b.`id` = r.`batch_id` " +
+                    "WHERE b.`official_lot_code` = @lot AND r.`status` IN ('Active', 'Completed')", conn, tx))
+                {
+                    cmd.Parameters.AddWithValue("@lot", lotCode);
+                    if (Convert.ToInt32(cmd.ExecuteScalar()) > 0)
+                    {
+                        tx.Rollback();
+                        return HttpStatusCode.Conflict;
+                    }
+                }
+
+                using (var cmd = new MySqlCommand(
+                    "UPDATE `runs` r JOIN `batches` b ON b.`id` = r.`batch_id` " +
+                    "SET r.`status` = 'Cancelled' " +
+                    "WHERE b.`official_lot_code` = @lot AND r.`status` = 'Pending'", conn, tx))
+                {
+                    cmd.Parameters.AddWithValue("@lot", lotCode);
+                    cancelledRuns = cmd.ExecuteNonQuery();
+                }
+
+                // Giữ nguyên giờ huỷ của các lần trước: chỉ đụng lô chưa huỷ.
+                using (var cmd = new MySqlCommand(
+                    "UPDATE `batches` SET `status` = 'Cancelled', `end_time` = NOW() " +
+                    "WHERE `official_lot_code` = @lot AND `status` <> 'Cancelled'", conn, tx))
+                {
+                    cmd.Parameters.AddWithValue("@lot", lotCode);
+                    cmd.ExecuteNonQuery();
+                }
+
+                tx.Commit();
+                return HttpStatusCode.OK;
             }
         }
 
@@ -711,6 +838,7 @@ namespace HinoTools.Data.Http
         ///
         /// Ba mã được trả TÁCH BẠCH để không ai nhầm nữa:
         ///   - official_lot_code    : MÃ LÔ nghiệp vụ (từ Base/MES) — đây là thứ MES dùng
+        ///   - product_lot_code     : mã lô thành phẩm MES gửi kèm mẻ BAT-, NULL với lô cũ
         ///   - machine_session_code : mã phiên chạy máy kỹ thuật (batches.name) — KHÔNG phải mã lô
         ///   - mc_code              : mã máy của Core
         /// Trường "name" và "id" được giữ lại để bên gọi cũ không vỡ.
@@ -736,9 +864,11 @@ namespace HinoTools.Data.Http
             string startTime = reader.IsDBNull(7) ? "null" : "\"" + Helper.TimeFormat.ToIso8601(reader.GetDateTime(7)) + "\"";
             string endTime = reader.IsDBNull(8) ? "null" : "\"" + Helper.TimeFormat.ToIso8601(reader.GetDateTime(8)) + "\"";
             string createdAt = reader.IsDBNull(9) ? "null" : "\"" + Helper.TimeFormat.ToIso8601(reader.GetDateTime(9)) + "\"";
+            object productLot = reader.IsDBNull(10) ? null : reader.GetValue(10);
 
             return indent + "{\n" +
                    indent + "  \"official_lot_code\": " + JsonText(officialLot) + ",\n" +
+                   indent + "  \"product_lot_code\": " + JsonText(productLot) + ",\n" +
                    indent + "  \"machine_session_code\": " + JsonText(name) + ",\n" +
                    indent + "  \"mc_code\": " + JsonText(mcCode) + ",\n" +
                    indent + "  \"device_name\": " + JsonText(devName) + ",\n" +
@@ -754,7 +884,8 @@ namespace HinoTools.Data.Http
 
         /// <summary>
         /// Chi tiết một lô tra theo mã lô chính thức: header + các mẻ + BOM từng mẻ.
-        /// Trả null nếu không có lô nào mang mã đó.
+        /// Trả null nếu không có lô nào mang mã đó. Mã đã đẩy lại sau khi huỷ có nhiều lô:
+        /// ưu tiên lô chưa huỷ, rồi lô mới nhất.
         /// </summary>
         private string BuildBatchJsonByLotCode(MySqlConnection conn, string lotCode)
         {
@@ -763,9 +894,10 @@ namespace HinoTools.Data.Http
 
             const string headerSql =
                 "SELECT b.`id`, b.`name`, b.`official_lot_code`, b.`device_name`, m.`mc_code`, " +
-                "       b.`status`, b.`total_runs`, b.`start_time`, b.`end_time`, b.`created_at` " +
+                "       b.`status`, b.`total_runs`, b.`start_time`, b.`end_time`, b.`created_at`, b.`product_lot_code` " +
                 "FROM `batches` b LEFT JOIN `machines` m ON m.`device_name` = b.`device_name` " +
-                "WHERE b.`official_lot_code` = @lot LIMIT 1";
+                "WHERE b.`official_lot_code` = @lot " +
+                "ORDER BY (b.`status` = 'Cancelled') ASC, b.`id` DESC LIMIT 1";
 
             using (var cmd = new MySqlCommand(headerSql, conn))
             {
