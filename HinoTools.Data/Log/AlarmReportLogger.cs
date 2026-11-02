@@ -1787,8 +1787,10 @@ namespace HinoTools.Data.Log
                                             $"WHERE `id` = {runId} AND `status` = 'Pending'";
                     if (dataAccess.ExecuteNonQuery(updateRunQuery) == 0)
                     {
-                        // Run vừa bị huỷ từ MES sau lúc đọc hàng chờ: bỏ qua, chu kỳ sau tìm lại.
-                        System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] Run ID {runId} không còn Pending, bỏ qua.");
+                        // Run vừa bị huỷ từ MES sau lúc đọc hàng chờ. Hàm này chỉ chạy đầu chu trình
+                        // nên tìm lại ngay; hết mẻ chờ thì rơi xuống tạo lô UNPLANNED, không mất dữ liệu.
+                        System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] Run ID {runId} không còn Pending, tìm lại.");
+                        LinkOrCreateActiveBatch();
                         return;
                     }
 

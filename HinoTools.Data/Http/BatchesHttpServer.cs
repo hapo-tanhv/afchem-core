@@ -552,7 +552,8 @@ namespace HinoTools.Data.Http
 
         /// <summary>
         /// Huỷ mẻ chờ theo mã lô chính thức (MES huỷ mẻ sau khi đã đẩy sang SCADA).
-        /// 200: đã huỷ hoặc trước đó đã huỷ rồi. 404: không có mã. 409: máy đã chạy mẻ này.
+        /// 200: máy chưa đụng tới mẻ này, đã huỷ hoặc trước đó đã huỷ rồi.
+        /// 404: không có mã. 409: máy đã chạy mẻ này, kể cả chạy lỗi.
         /// </summary>
         private void HandleCancelBatch(HttpListenerRequest request, HttpListenerResponse response)
         {
@@ -606,7 +607,7 @@ namespace HinoTools.Data.Http
             {
                 SendJsonResponse(response, HttpStatusCode.Conflict,
                     "{\n  \"success\": false,\n  \"message\": \"Mã lô '" + EscapeJsonString(lotCode) +
-                    "' đã có mẻ đang chạy hoặc đã xong trên máy, không huỷ được.\"\n}");
+                    "' đã chạy trên máy (đang chạy, đã xong hoặc lỗi), không huỷ được.\"\n}");
             }
             else
             {
@@ -623,13 +624,19 @@ namespace HinoTools.Data.Http
                 // Khoá dòng lô trước: webhook tạo run sau khi đã trả lời, lệnh INSERT của nó
                 // phải chờ ở đây rồi thấy lô đã huỷ, không để run Pending lọt sau khi huỷ.
                 bool found = false;
+                bool started = false;
                 using (var cmd = new MySqlCommand(
-                    "SELECT `id` FROM `batches` WHERE `official_lot_code` = @lot FOR UPDATE", conn, tx))
+                    "SELECT `status` FROM `batches` WHERE `official_lot_code` = @lot FOR UPDATE", conn, tx))
                 {
                     cmd.Parameters.AddWithValue("@lot", lotCode);
                     using (var reader = cmd.ExecuteReader())
                     {
-                        found = reader.Read();
+                        while (reader.Read())
+                        {
+                            found = true;
+                            string status = reader.GetString(0);
+                            if (status != "Pending" && status != "Cancelled") started = true;
+                        }
                     }
                 }
                 if (!found)
@@ -640,9 +647,10 @@ namespace HinoTools.Data.Http
 
                 // Khoá cả dòng run: máy nhận mẻ cùng lúc thì lệnh UPDATE của plugin chờ ở đây,
                 // rồi thấy run không còn Pending và bỏ qua.
-                bool started = false;
+                // Dùng danh sách cho phép: run Error nghĩa là nguyên liệu đã xuống máy,
+                // huỷ rồi đẩy lại sẽ thành chạy hai lần.
                 using (var cmd = new MySqlCommand(
-                    "SELECT r.`status` FROM `runs` r JOIN `batches` b ON b.`id` = r.`batch_id` " +
+                    "SELECT r.`status`, r.`start_time` FROM `runs` r JOIN `batches` b ON b.`id` = r.`batch_id` " +
                     "WHERE b.`official_lot_code` = @lot FOR UPDATE", conn, tx))
                 {
                     cmd.Parameters.AddWithValue("@lot", lotCode);
@@ -651,7 +659,7 @@ namespace HinoTools.Data.Http
                         while (reader.Read())
                         {
                             string status = reader.GetString(0);
-                            if (status == "Active" || status == "Completed") started = true;
+                            if ((status != "Pending" && status != "Cancelled") || !reader.IsDBNull(1)) started = true;
                         }
                     }
                 }
@@ -673,7 +681,7 @@ namespace HinoTools.Data.Http
                 // Giữ nguyên giờ huỷ của các lần trước: chỉ đụng lô chưa huỷ.
                 using (var cmd = new MySqlCommand(
                     "UPDATE `batches` SET `status` = 'Cancelled', `end_time` = NOW() " +
-                    "WHERE `official_lot_code` = @lot AND `status` <> 'Cancelled'", conn, tx))
+                    "WHERE `official_lot_code` = @lot AND `status` = 'Pending'", conn, tx))
                 {
                     cmd.Parameters.AddWithValue("@lot", lotCode);
                     cmd.ExecuteNonQuery();

@@ -388,10 +388,9 @@ namespace HinoTools.Alarm.Control
                     string updateRun = $"UPDATE `runs` SET `status` = 'Active', `start_time` = '{nowStr}', `is_paused` = 0 WHERE `id` = {runId} AND `status` = 'Pending'";
                     if (this.dataAccess.ExecuteNonQuery(updateRun) == 0)
                     {
-                        // Run vừa bị huỷ từ MES sau lúc đọc hàng chờ: bỏ qua, chu kỳ sau tìm lại.
-                        WriteDebugLog(string.Format("[GetActiveBatchAndRunId] Run ID {0} không còn Pending, bỏ qua.", runId));
-                        runId = null;
-                        batchId = null;
+                        // Run vừa bị huỷ từ MES sau lúc đọc hàng chờ: tìm lại ngay để dòng này không mang runId NULL.
+                        WriteDebugLog(string.Format("[GetActiveBatchAndRunId] Run ID {0} không còn Pending, tìm lại.", runId));
+                        GetActiveBatchAndRunId(deviceName, false, out batchId, out runId);
                         return;
                     }
 

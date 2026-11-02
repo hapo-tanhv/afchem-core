@@ -361,10 +361,15 @@ namespace HinoTools.Data.Http
                                 {
                                     string existingName = null;
                                     string existingStatus = null;
+                                    int existingId = 0;
+                                    bool existingOrphan = false;
                                     using (var cmdDup = new MySqlCommand(
-                                        "SELECT `name`, `status` FROM `batches` " +
-                                        "WHERE `official_lot_code` = @lot AND `status` <> 'Cancelled' " +
-                                        "ORDER BY `id` DESC LIMIT 1", conn))
+                                        "SELECT b.`name`, b.`status`, b.`id`, " +
+                                        "  b.`status` = 'Pending' AND b.`created_at` < NOW() - INTERVAL 60 SECOND " +
+                                        "  AND NOT EXISTS (SELECT 1 FROM `runs` r WHERE r.`batch_id` = b.`id`) " +
+                                        "FROM `batches` b " +
+                                        "WHERE b.`official_lot_code` = @lot AND b.`status` <> 'Cancelled' " +
+                                        "ORDER BY b.`id` DESC LIMIT 1", conn))
                                     {
                                         cmdDup.Parameters.AddWithValue("@lot", officialLotCode);
                                         using (var readerDup = cmdDup.ExecuteReader())
@@ -373,8 +378,18 @@ namespace HinoTools.Data.Http
                                             {
                                                 existingName = readerDup.GetString(0);
                                                 existingStatus = readerDup.GetString(1);
+                                                existingId = readerDup.GetInt32(2);
+                                                existingOrphan = readerDup.GetInt64(3) == 1;
                                             }
                                         }
+                                    }
+
+                                    // Lần đẩy trước đổ giữa chừng để lại lô không có run: máy không bao giờ
+                                    // nhận lô đó, nên đóng lại rồi tạo mẻ mới thay vì trả "đã có".
+                                    if (existingOrphan)
+                                    {
+                                        CancelBatchById(existingId);
+                                        existingName = null;
                                     }
 
                                     if (existingName != null)
@@ -493,8 +508,16 @@ namespace HinoTools.Data.Http
                         return;
                     }
 
-                    // Start background task to create runs and import BOM
-                    _ = Task.Run(() => ProcessWebhookAsync(logId, batchId, batchName, totalRuns, deviceName, paramsDict));
+                    // Tạo mẻ chạy và BOM TRƯỚC khi trả lời: bên gọi nhận 200 nghĩa là mẻ đã nằm đủ
+                    // trong hàng chờ. Lỗi thì đóng lô để đẩy lại tạo được mẻ mới.
+                    if (!CreateRunsAndBom(logId, batchId, batchName, totalRuns, deviceName, paramsDict))
+                    {
+                        CancelBatchById(batchId);
+                        string errorResponse = "{\n  \"success\": false,\n  \"message\": \"Không tạo được mẻ chạy hoặc BOM cho lô. " +
+                                               "Kiểm tra dữ liệu BOM rồi đẩy lại.\"\n}";
+                        SendJsonResponse(response, HttpStatusCode.InternalServerError, errorResponse);
+                        return;
+                    }
 
                     // Synchronously return success response.
                     // Đợt 3B: trả rõ hai mã tách bạch — official_lot_code là MÃ LÔ,
@@ -596,7 +619,30 @@ namespace HinoTools.Data.Http
             }
         }
 
-        private void ProcessWebhookAsync(int logId, int batchId, string batchName, int totalRuns, string deviceName, System.Collections.Generic.Dictionary<string, string> paramsDict)
+        private void CancelBatchById(int batchId)
+        {
+            lock (dbLock)
+            {
+                using (var conn = new MySqlConnection(connectionString))
+                {
+                    conn.Open();
+                    using (var cmd = new MySqlCommand(
+                        "UPDATE `runs` SET `status` = 'Cancelled' WHERE `batch_id` = @id AND `status` = 'Pending'", conn))
+                    {
+                        cmd.Parameters.AddWithValue("@id", batchId);
+                        cmd.ExecuteNonQuery();
+                    }
+                    using (var cmd = new MySqlCommand(
+                        "UPDATE `batches` SET `status` = 'Cancelled', `end_time` = NOW() WHERE `id` = @id AND `status` = 'Pending'", conn))
+                    {
+                        cmd.Parameters.AddWithValue("@id", batchId);
+                        cmd.ExecuteNonQuery();
+                    }
+                }
+            }
+        }
+
+        private bool CreateRunsAndBom(int logId, int batchId, string batchName, int totalRuns, string deviceName, System.Collections.Generic.Dictionary<string, string> paramsDict)
         {
             try
             {
@@ -638,8 +684,8 @@ namespace HinoTools.Data.Http
                             conn.Open();
                             EnsureWebhookTableExists(conn);
 
-                            // Mẻ chạy được tạo sau khi đã trả lời bên gọi, nên lệnh huỷ có thể tới trước.
-                            // Chỉ tạo khi lô chưa huỷ: run Pending sót lại sẽ bị máy ăn ở lần chạy kế tiếp.
+                            // Lệnh huỷ có thể tới giữa chừng. Chỉ tạo khi lô chưa huỷ:
+                            // run Pending sót lại sẽ bị máy ăn ở lần chạy kế tiếp.
                             string insertRunQuery = "INSERT INTO `runs` (`batch_id`, `run_number`, `name`, `status`, `execution_order`, `created_at`) " +
                                                     "SELECT @batch_id, @run_number, @name, 'Pending', @execution_order, NOW() " +
                                                     "FROM `batches` WHERE `id` = @batch_id AND `status` <> 'Cancelled'";
@@ -652,7 +698,7 @@ namespace HinoTools.Data.Http
                                 if (cmd.ExecuteNonQuery() == 0)
                                 {
                                     UpdateWebhookStatus(logId, "Cancelled", "Lô đã huỷ trước khi tạo mẻ chạy");
-                                    return;
+                                    return false;
                                 }
                                 runId = (int)cmd.LastInsertedId;
                             }
@@ -744,11 +790,13 @@ namespace HinoTools.Data.Http
                 // If processing succeeds, update status to Completed
                 UpdateWebhookStatus(logId, "Completed");
                 System.Diagnostics.Debug.WriteLine($"[WebhookHttpServer] Webhook log ID {logId} processed and runs/BOMs created successfully.");
+                return true;
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"[WebhookHttpServer] ERROR processing background runs/BOMs for webhook log ID {logId}: {ex.Message}");
                 UpdateWebhookStatus(logId, "Failed", ex.ToString());
+                return false;
             }
         }
 
