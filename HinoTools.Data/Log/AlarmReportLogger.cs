@@ -98,6 +98,13 @@ namespace HinoTools.Data.Log
         private DateTime lastAlarmReportTime = DateTime.MinValue;
         private double[] lastSetpoints = new double[8] { -1, -1, -1, -1, -1, -1, -1, -1 };
 
+        // Khôi phục sau khi chương trình/máy tính khởi động lại giữa lượt đang chạy.
+        // Chỉ lần đồng bộ run đầu tiên sau khi chương trình mở mới được coi là "khởi động lại".
+        private bool startupSyncDone = false;
+        private const int RestartRecoveryMaxGapMinutes = 15;
+        private const string RuntimeLogFileName = "scada_runtime.log";
+        private static readonly object runtimeLogLock = new object();
+
         // Accumulator State
         private Dictionary<string, double> accumulatedTimers = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
         private Dictionary<string, double> previousTimerValues = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
@@ -375,6 +382,10 @@ namespace HinoTools.Data.Log
             tmrLog.Elapsed += (sender, e) => PollAndLog();
             tmrLog.Start();
             System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] Initialized successfully. Idle Timer started (1000ms).");
+
+            WriteRuntimeLog("START chương trình khởi động, bắt đầu theo dõi PLC.");
+            AppDomain.CurrentDomain.ProcessExit += (s, e) =>
+                WriteRuntimeLog($"STOP chương trình dừng. runId={activeRunId?.ToString() ?? "-"}, congDoan={currentCongDoan}.");
         }
 
         private IEnumerable<LogItem> GetLogItems()
@@ -519,18 +530,28 @@ namespace HinoTools.Data.Log
                         // If the database active run ID has changed, reset the in-memory state machine
                         if (activeRunId != dbRunId)
                         {
-                            System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] New active run detected in DB: {dbRunId} (old in-memory: {activeRunId}). Resetting state machine to align.");
-                            activeRunId = dbRunId;
-                            activeBatchId = dbBatchId;
-                            currentCongDoan = 1;
-                            ResetFlags();
-                            ResetAccumulators();
-                            RecoverAccumulatorsFromDb(dbRunId);
-                            hasThoiGianCapLieuStarted = true;
-                            InsertRealtimeInfoEvent("T001", "Bắt đầu cấp liệu");
-                            lastAlarmReportTime = DateTime.MinValue; // Trigger instant logging for the new run
+                            if (!startupSyncDone && activeRunId == null)
+                            {
+                                // Chương trình vừa mở lên mà DB đã có run Active: đây là khởi động lại giữa lượt,
+                                // không phải run mới. Phải xác định công đoạn máy đang ở, không đặt về 1.
+                                RecoverStateAfterRestart(dbRunId, dbBatchId);
+                            }
+                            else
+                            {
+                                System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] New active run detected in DB: {dbRunId} (old in-memory: {activeRunId}). Resetting state machine to align.");
+                                activeRunId = dbRunId;
+                                activeBatchId = dbBatchId;
+                                currentCongDoan = 1;
+                                ResetFlags();
+                                ResetAccumulators();
+                                RecoverAccumulatorsFromDb(dbRunId);
+                                hasThoiGianCapLieuStarted = true;
+                                InsertRealtimeInfoEvent("T001", "Bắt đầu cấp liệu");
+                                lastAlarmReportTime = DateTime.MinValue; // Trigger instant logging for the new run
+                            }
                         }
                     }
+                    startupSyncDone = true;
                 }
                 catch (Exception ex)
                 {
@@ -890,6 +911,125 @@ namespace HinoTools.Data.Log
                 System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] ERROR in PollAndLog: {ex.Message}");
                 tmrLog.Start();
             }
+        }
+
+        /// <summary>
+        /// Ghi nhật ký vận hành ra file cạnh ứng dụng (khởi động, dừng, khôi phục giữa lượt).
+        /// Không bao giờ ném lỗi ra ngoài.
+        /// </summary>
+        private void WriteRuntimeLog(string message)
+        {
+            try
+            {
+                string path = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory ?? "", RuntimeLogFileName);
+                lock (runtimeLogLock)
+                {
+                    System.IO.File.AppendAllText(path,
+                        $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [{deviceName}] {message}{Environment.NewLine}");
+                }
+            }
+            catch { }
+        }
+
+        private double GetPlcTimerOrZero(string alias)
+        {
+            double value = GetTagValueByAlias(alias);
+            return double.IsNaN(value) ? 0 : value;
+        }
+
+        /// <summary>
+        /// Chương trình mở lại giữa lượt Active: khôi phục công đoạn hiện tại thay vì đặt về 1.
+        /// Thứ tự xác định công đoạn: (1) bộ đếm PLC đang chạy, (2) dòng alarmreport cuối của run
+        /// (nếu còn mới), (3) mặc định công đoạn 1 như hành vi cũ.
+        /// </summary>
+        private void RecoverStateAfterRestart(int dbRunId, int dbBatchId)
+        {
+            activeRunId = dbRunId;
+            activeBatchId = dbBatchId;
+            ResetFlags();
+            ResetAccumulators();
+            RecoverAccumulatorsFromDb(dbRunId);
+
+            double capLieu = GetPlcTimerOrZero("ThoiGianCapLieu");
+            double tron1 = GetPlcTimerOrZero("ThoiGianTron1");
+            double xaDay = GetPlcTimerOrZero("ThoiGianXaDay");
+            double rungXaDay = GetPlcTimerOrZero("ThoiGianRungXaDay");
+            double hutXaDay = GetPlcTimerOrZero("ThoiGianHutXaDay");
+            double tron2 = GetPlcTimerOrZero("ThoiGianTron2");
+            double xaHang = GetPlcTimerOrZero("ThoiGianXaHang");
+            double rungXaHang = GetPlcTimerOrZero("ThoiGianRungXaHang");
+
+            // Dòng alarmreport cuối của run: dùng để lấy lại công đoạn (khi PLC không báo) và QuyTrinh.
+            int lastStage = 0;
+            int lastQuyTrinh = 0;
+            DateTime lastRowTime = DateTime.MinValue;
+            bool hasHistory = false;
+            try
+            {
+                dataAccess.ConnectionString = GetConnectionStringWithDb();
+                var dt = dataAccess.ExecuteQuery(
+                    $"SELECT `CongDoanMay`, `QuyTrinh`, `DateTime` FROM `{TableName}` " +
+                    $"WHERE `runId` = {dbRunId} ORDER BY `ID` DESC LIMIT 1");
+                if (dt != null && dt.Rows.Count > 0)
+                {
+                    hasHistory = true;
+                    int.TryParse(Convert.ToString(dt.Rows[0]["CongDoanMay"]), out lastStage);
+                    int.TryParse(Convert.ToString(dt.Rows[0]["QuyTrinh"]), out lastQuyTrinh);
+                    lastRowTime = Convert.ToDateTime(dt.Rows[0]["DateTime"]);
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] RecoverStateAfterRestart: không đọc được dòng alarmreport cuối: {ex.Message}");
+            }
+
+            int stage = 0;
+            string source;
+            if (xaHang > 0 || rungXaHang > 0) stage = 5;
+            else if (tron2 > 0) stage = 4;
+            else if (xaDay > 0 || rungXaDay > 0 || hutXaDay > 0) stage = 3;
+            else if (tron1 > 0) stage = 2;
+            else if (capLieu > 0) stage = 1;
+
+            if (stage > 0)
+            {
+                source = "PLC";
+            }
+            else if (hasHistory && lastStage >= 1 && lastStage <= 5 &&
+                     (DateTime.Now - lastRowTime).TotalMinutes <= RestartRecoveryMaxGapMinutes)
+            {
+                stage = lastStage;
+                source = "alarmreport";
+            }
+            else
+            {
+                stage = 1;
+                source = "mac-dinh";
+            }
+
+            currentCongDoan = stage;
+            if (lastQuyTrinh > 0) currentQuyTrinh = lastQuyTrinh;
+
+            // Đặt cờ "đã bắt đầu" theo công đoạn vừa khôi phục để điều kiện chuyển công đoạn chạy tiếp được.
+            hasThoiGianCapLieuStarted = stage == 1;
+            hasThoiGianTron1Started = stage == 2 && tron1 > 0;
+            hasThoiGianHutXaStarted = stage == 3 && hutXaDay > 0;
+            hasThoiGianTron2Started = stage == 4 && tron2 > 0;
+            hasThoiGianRungXaHangStarted = stage == 5 && rungXaHang > 0;
+            hasThoiGianXaHangStarted = stage == 5 && xaHang > 0;
+
+            // Chỉ ghi "Bắt đầu cấp liệu" khi đây thật sự là run chưa có dòng đo nào.
+            if (!hasHistory && stage == 1)
+            {
+                InsertRealtimeInfoEvent("T001", "Bắt đầu cấp liệu");
+            }
+
+            lastAlarmReportTime = DateTime.MinValue; // ghi ngay dòng đầu sau khi khôi phục
+
+            WriteRuntimeLog(
+                $"RECOVER khôi phục giữa lượt: runId={dbRunId}, batchId={dbBatchId}, congDoan={stage} (nguồn: {source}), " +
+                $"quyTrinh={currentQuyTrinh}, alarmreportCuoi=[congDoan={lastStage}, luc={(hasHistory ? lastRowTime.ToString("yyyy-MM-dd HH:mm:ss") : "-")}], " +
+                $"PLC=[capLieu={capLieu}, tron1={tron1}, xaDay={xaDay}, rungXaDay={rungXaDay}, hutXaDay={hutXaDay}, tron2={tron2}, xaHang={xaHang}, rungXaHang={rungXaHang}]");
         }
 
         private void ResetFlags()
