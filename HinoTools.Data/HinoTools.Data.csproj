@@ -53,8 +53,13 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Config\ScadaConfig.cs" />
+    <Compile Include="Db\SchemaMigrator.cs" />
     <Compile Include="Database\DataAccess.cs" />
     <Compile Include="Helper\DeviceNameHelper.cs" />
+    <Compile Include="Helper\MachineInfo.cs" />
+    <Compile Include="Helper\MachineRegistry.cs" />
+    <Compile Include="Helper\TimeFormat.cs" />
     <Compile Include="Http\BatchesHttpServer.cs" />
     <Compile Include="Http\WebhookHttpServer.cs" />
     <Compile Include="Database\DatabaseParam.cs" />

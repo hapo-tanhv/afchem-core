@@ -56,6 +56,14 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <!-- Đợt 3B: dùng chung 1 file nguồn với HinoTools.Data (liên kết, KHÔNG thêm phụ thuộc assembly
+         để không đổi footprint triển khai của HinoTools.Alarm.dll trên máy nhà máy). -->
+    <Compile Include="..\HinoTools.Data\Config\ScadaConfig.cs">
+      <Link>Config\ScadaConfig.cs</Link>
+    </Compile>
+    <Compile Include="..\HinoTools.Data\Helper\DeviceNameHelper.cs">
+      <Link>Helper\DeviceNameHelper.cs</Link>
+    </Compile>
     <Compile Include="Client\AlarmClient.cs">
       <SubType>Component</SubType>
     </Compile>

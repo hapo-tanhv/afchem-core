@@ -36,7 +36,31 @@ namespace HinoTools.Alarm.Control
         public string UserID { get; set; } = "root";
 
         [Category("Hino Settings")]
-        public string Password { get; set; } = "101101";
+        public string Password { get; set; } = "";
+
+        // --- Đợt 3B: thông tin đăng nhập MySQL không còn nhúng trong mã nguồn. ---
+        // Ưu tiên giá trị đặt tường minh trên component (ATSCADA designer), sau đó tới
+        // file scada-runtime.config. Thiếu cả hai với user/mật khẩu => báo lỗi rõ ràng
+        // thay vì âm thầm dùng tài khoản mặc định. Xem HinoTools.Data.Config.ScadaConfig.
+        private string DbServer
+        {
+            get { return HinoTools.Data.Config.ScadaConfig.ResolveOptional(ServerName, HinoTools.Data.Config.ScadaConfig.KeyDbServer, "localhost"); }
+        }
+
+        private string DbUser
+        {
+            get { return HinoTools.Data.Config.ScadaConfig.Resolve(UserID, HinoTools.Data.Config.ScadaConfig.KeyDbUser); }
+        }
+
+        private string DbPassword
+        {
+            get { return HinoTools.Data.Config.ScadaConfig.Resolve(Password, HinoTools.Data.Config.ScadaConfig.KeyDbPassword); }
+        }
+
+        private string DbName
+        {
+            get { return HinoTools.Data.Config.ScadaConfig.ResolveOptional(DatabaseName, HinoTools.Data.Config.ScadaConfig.KeyDbName, "scada"); }
+        }
 
         [Category("Hino Settings")]
         public string DatabaseName { get; set; } = "scada";
@@ -70,8 +94,8 @@ namespace HinoTools.Alarm.Control
         {
             try
             {
-                this.dataAccess.ConnectionString = $"Server={ServerName};Uid={UserID};Pwd={Password};";
-                var query = $"create database if not exists {DatabaseName}";
+                this.dataAccess.ConnectionString = $"Server={DbServer};Uid={DbUser};Pwd={DbPassword};CharSet=utf8;";
+                var query = $"create database if not exists {DbName}";
                 return this.dataAccess.ExecuteNonQuery(query) >= 0;
             }
             catch { return false; }
@@ -81,7 +105,7 @@ namespace HinoTools.Alarm.Control
         {
             try
             {
-                this.dataAccess.ConnectionString = $"Server={ServerName};Uid={UserID};Pwd={Password}; Database={DatabaseName}";
+                this.dataAccess.ConnectionString = $"Server={DbServer};Uid={DbUser};Pwd={DbPassword};CharSet=utf8; Database={DbName}";
                 var query = $"create table if not exists {TableName} (" +
                     $"`ID` int not null auto_increment, " +
                     $"`OccurrenceTime` DateTime not null, " +                   
@@ -101,7 +125,7 @@ namespace HinoTools.Alarm.Control
         {
             try
             {
-                this.dataAccess.ConnectionString = $"Server={ServerName};Uid={UserID};Pwd={Password}; Database={DatabaseName}";
+                this.dataAccess.ConnectionString = $"Server={DbServer};Uid={DbUser};Pwd={DbPassword};CharSet=utf8; Database={DbName}";
                 var status = eventItem.Status == EventStatus.ACTIVE ? eventItem.Param.ValueActive : eventItem.Param.ValueInactive;
                 var query = $"insert into {TableName} (`OccurrenceTime`, `TagName`, `TagNo`, `Location`, `Description`, `Status`) values (" +
                     $"'{eventItem.OccurrenceTime:yyyy-MM-dd HH:mm:ss}', " +

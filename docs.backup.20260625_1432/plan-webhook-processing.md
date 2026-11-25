@@ -115,7 +115,7 @@ CREATE TABLE IF NOT EXISTS `run_info` (
 ### B. Xác minh Thủ công (Manual Test)
 Sử dụng cURL gửi request kiểm thử với dữ liệu thực tế từ Base:
 ```bash
-curl -X POST "http://localhost:5600/api/webhook?token=wh_tok_2f8d9b1e4c7a6e5b3d2c1f0a9e8d7c6b" \
+curl -X POST "http://localhost:5600/api/webhook?token=<WEBHOOK_TOKEN>" \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "custom_ngay_san_xuat=04%2F06%2F2026&custom_thiet_bi_su_dung=TX01&custom_so_me_san_xuat=2&custom_ten_hang_hoa=TEST+AF&custom_ma_dinh_danh=ABCYA123&custom_nha_san_xuat=AFCHEM&custom_khoi_luong_muc_tieu=0.82&custom_cong_thuc=AFCx12223&custom_thong_tin_bom_san_xuat_a=W1siQUJDIiwiQUYwMSIsIjAuOCIsIjExMTAiLCJLRyIsIjEyMzIxNTEyMyJdXQ%3D%3D&custom_thong_tin_bom_san_xuat_b=W1siQUNDVyIsIkFGMDIiLCIwLjgiLCIxMjMiLCJLRyIsIjEyMzEyNTEyMyJdXQ%3D%3D"
 ```

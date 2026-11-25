@@ -24,7 +24,7 @@ Chúng ta đã thiết kế và tích hợp thành công bộ nhận Webhook si�
    - Tích hợp vòng đời khởi chạy/dừng của `WebhookHttpServer` song song cùng `BatchesHttpServer`.
    - Bổ sung các thuộc tính cấu hình trực quan trong Category `"Hino Settings"`:
      - `WebhookPort` (Cổng API Webhook, mặc định `5600`).
-     - `WebhookToken` (Mã bảo mật Webhook, mặc định `wh_tok_2f8d9b1e4c7a6e5b3d2c1f0a9e8d7c6b`).
+     - `WebhookToken` (Mã bảo mật Webhook, mặc định `<WEBHOOK_TOKEN>`).
    - Tự động Start Server khi logger được kích hoạt (`TryInitialize`).
 
 4. **[MODIFY] AlarmReportLogger.Designer.cs** (`HinoTools.Data/Log/AlarmReportLogger.Designer.cs`):
@@ -65,16 +65,16 @@ Các tham số cấu hình có thể được thiết lập trực tiếp trên 
   <!-- Cổng mạng lắng nghe API Webhook -->
   <add key="WebhookPort" value="5600" />
   <!-- Mã khóa bảo mật xác thực request gửi tới -->
-  <add key="WebhookToken" value="wh_tok_2f8d9b1e4c7a6e5b3d2c1f0a9e8d7c6b" />
+  <add key="WebhookToken" value="<WEBHOOK_TOKEN>" />
 </appSettings>
 ```
 
-- **API Endpoint URL**: `http://[IP_MAY_CHU]:5600/api/webhook?token=wh_tok_2f8d9b1e4c7a6e5b3d2c1f0a9e8d7c6b` (Khuyên dùng cho bên thứ ba truyền trực tiếp qua URL)
+- **API Endpoint URL**: `http://[IP_MAY_CHU]:5600/api/webhook?token=<WEBHOOK_TOKEN>` (Khuyên dùng cho bên thứ ba truyền trực tiếp qua URL)
   - Hoặc đường dẫn gốc: `http://[IP_MAY_CHU]:5600/api/webhook` (Nếu bên thứ ba có thể cấu hình HTTP Headers)
 - **HTTP Method**: `POST`
 - **HTTP Headers (Nếu có)**:
   - `Content-Type`: `application/json`
-  - `X-Webhook-Token`: `wh_tok_2f8d9b1e4c7a6e5b3d2c1f0a9e8d7c6b` (Nếu dùng phương thức xác thực qua Header)
+  - `X-Webhook-Token`: `<WEBHOOK_TOKEN>` (Nếu dùng phương thức xác thực qua Header)
 
 ---
 
@@ -86,7 +86,7 @@ Bạn có thể sử dụng các công cụ kiểm thử như **Postman**, **cUR
 
 #### Cách 1: Xác thực qua Query Parameter (Được khuyến nghị cho bên thứ 3)
 ```bash
-curl -X POST "http://localhost:5600/api/webhook?token=wh_tok_2f8d9b1e4c7a6e5b3d2c1f0a9e8d7c6b" \
+curl -X POST "http://localhost:5600/api/webhook?token=<WEBHOOK_TOKEN>" \
   -H "Content-Type: application/json" \
   -d '{"event": "batch_start", "batch_name": "TX01-20260526-01", "operator": "User01", "temperature": 75.5}'
 ```
@@ -95,7 +95,7 @@ curl -X POST "http://localhost:5600/api/webhook?token=wh_tok_2f8d9b1e4c7a6e5b3d2
 ```bash
 curl -X POST http://localhost:5600/api/webhook \
   -H "Content-Type: application/json" \
-  -H "X-Webhook-Token: wh_tok_2f8d9b1e4c7a6e5b3d2c1f0a9e8d7c6b" \
+  -H "X-Webhook-Token: <WEBHOOK_TOKEN>" \
   -d '{"event": "batch_start", "batch_name": "TX01-20260526-01", "operator": "User01", "temperature": 75.5}'
 ```
 * **Kỳ vọng phản hồi**: HTTP Status `200 OK`

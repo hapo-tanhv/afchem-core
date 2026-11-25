@@ -48,7 +48,7 @@ graph TD
 // Cơ chế tự động kết nối lại MySQL với thời gian chờ tăng dần tại startup
 public static class DatabaseInitializer
 {
-    private static readonly string ConnectionString = "Server=localhost;Uid=root;Pwd=101101;";
+    private static readonly string ConnectionString = "Server=localhost;Uid=root;Pwd=<MAT_KHAU>;";
 
     public static bool WaitForDatabaseReady(int maxRetries = 10, int initialDelayMs = 2000)
     {

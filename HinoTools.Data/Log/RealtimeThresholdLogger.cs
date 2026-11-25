@@ -94,7 +94,31 @@ namespace HinoTools.Data.Log
         public string UserID { get; set; } = "root";
 
         [Category("Hino Settings")]
-        public string Password { get; set; } = "101101";
+        public string Password { get; set; } = "";
+
+        // --- Đợt 3B: thông tin đăng nhập MySQL không còn nhúng trong mã nguồn. ---
+        // Ưu tiên giá trị đặt tường minh trên component (ATSCADA designer), sau đó tới
+        // file scada-runtime.config. Thiếu cả hai với user/mật khẩu => báo lỗi rõ ràng
+        // thay vì âm thầm dùng tài khoản mặc định. Xem HinoTools.Data.Config.ScadaConfig.
+        private string DbServer
+        {
+            get { return HinoTools.Data.Config.ScadaConfig.ResolveOptional(ServerName, HinoTools.Data.Config.ScadaConfig.KeyDbServer, "localhost"); }
+        }
+
+        private string DbUser
+        {
+            get { return HinoTools.Data.Config.ScadaConfig.Resolve(UserID, HinoTools.Data.Config.ScadaConfig.KeyDbUser); }
+        }
+
+        private string DbPassword
+        {
+            get { return HinoTools.Data.Config.ScadaConfig.Resolve(Password, HinoTools.Data.Config.ScadaConfig.KeyDbPassword); }
+        }
+
+        private string DbName
+        {
+            get { return HinoTools.Data.Config.ScadaConfig.ResolveOptional(DatabaseName, HinoTools.Data.Config.ScadaConfig.KeyDbName, "scada"); }
+        }
 
         [Category("Hino Settings")]
         public string DatabaseName { get; set; } = "scada";
@@ -154,7 +178,17 @@ namespace HinoTools.Data.Log
             // Only initialize once, and only when both Driver and Collection are set
             if (tmrScan != null) return;
             if (driver == null || Collection == null || Collection.Length == 0) return;
-            deviceName = ExtractDeviceName();
+
+            // Đợt 3B: không xác định được máy => DỪNG KHỞI TẠO, không ghi bản ghi nào.
+            string deviceResolveError;
+            deviceName = ExtractDeviceName(out deviceResolveError);
+            if (string.IsNullOrEmpty(deviceName))
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    "[RealtimeThresholdLogger] DỪNG KHỞI TẠO — không xác định được máy: " + deviceResolveError);
+                return;
+            }
+
             thresholdItems = GetThresholdItems().ToList();
             if (thresholdItems.Count == 0) return;
 
@@ -241,9 +275,10 @@ namespace HinoTools.Data.Log
                 ITag thresholdTag = null;
                 if (!string.IsNullOrEmpty(thresholdTagOrValue) && this.driver != null)
                 {
-                    string dev = string.IsNullOrEmpty(deviceName) ? ExtractDeviceName() : deviceName;
-                    thresholdTag = this.driver.GetTagByName(thresholdTagOrValue) ?? 
-                                   this.driver.GetTagByName(dev + "." + thresholdTagOrValue);
+                    // deviceName đã được xác định và kiểm tra trong TryInitialize trước khi gọi hàm này;
+                    // không còn đường nào đoán lại tên máy ở đây.
+                    thresholdTag = this.driver.GetTagByName(thresholdTagOrValue) ??
+                                   this.driver.GetTagByName(deviceName + "." + thresholdTagOrValue);
                 }
 
                 yield return new ThresholdItem()
@@ -262,16 +297,32 @@ namespace HinoTools.Data.Log
         }
 
         /// <summary>
-        /// Extract device name prefix from first tag (e.g. "AFChemTX01.NhietDoMay" -> "AFChemTX01").
+        /// Tiền tố tên máy lấy từ tag đầu tiên (ví dụ "AFChemTX01.NhietDoMay" -> "AFChemTX01").
+        ///
+        /// Đợt 3B: trả <c>null</c> thay vì "Unknown"/tiền tố thô khi không xác định được máy.
+        /// Người gọi phải dừng khởi tạo — ghi ngưỡng cảnh báo dưới tên máy đoán bừa
+        /// làm sai chuỗi truy xuất.
         /// </summary>
-        private string ExtractDeviceName()
+        private string ExtractDeviceName(out string reason)
         {
+            reason = null;
+
             if (Collection == null || Collection.Length == 0)
-                return "Unknown";
+            {
+                reason = "Chưa cấu hình Collection (danh sách tag) — không xác định được máy.";
+                return null;
+            }
 
             var firstTag = Collection[0].Split(';')[0];
-            var dotIndex = firstTag.IndexOf('.');
-            return dotIndex > 0 ? firstTag.Substring(0, dotIndex) : firstTag;
+            string prefix = Helper.DeviceNameHelper.ExtractTagPrefix(firstTag);
+
+            if (string.IsNullOrEmpty(prefix))
+            {
+                reason = $"Không tách được tiền tố máy từ tag '{firstTag}'.";
+                return null;
+            }
+
+            return prefix;
         }
 
         #endregion
@@ -502,12 +553,12 @@ namespace HinoTools.Data.Log
 
         private string GetConnectionStringWithoutDb()
         {
-            return $"Server={ServerName};Uid={UserID};Pwd={Password};";
+            return $"Server={DbServer};Uid={DbUser};Pwd={DbPassword};CharSet=utf8;";
         }
 
         private string GetConnectionStringWithDb()
         {
-            return $"Server={ServerName};Uid={UserID};Pwd={Password};Database={DatabaseName}";
+            return $"Server={DbServer};Uid={DbUser};Pwd={DbPassword};CharSet=utf8;Database={DbName}";
         }
 
         /// <summary>
@@ -518,7 +569,7 @@ namespace HinoTools.Data.Log
             try
             {
                 dataAccess.ConnectionString = GetConnectionStringWithoutDb();
-                var query = $"CREATE DATABASE IF NOT EXISTS `{DatabaseName}`";
+                var query = $"CREATE DATABASE IF NOT EXISTS `{DbName}`";
                 return dataAccess.ExecuteNonQuery(query) >= 0;
             }
             catch { return false; }

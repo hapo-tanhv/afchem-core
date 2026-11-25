@@ -1,6 +1,7 @@
 using ATSCADA;
 using ATSCADA.ToolExtensions.ExtensionMethods;
 using HinoTools.Data.Database;
+using MySql.Data.MySqlClient;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -97,6 +98,13 @@ namespace HinoTools.Data.Log
         private DateTime lastAlarmReportTime = DateTime.MinValue;
         private double[] lastSetpoints = new double[8] { -1, -1, -1, -1, -1, -1, -1, -1 };
 
+        // Khôi phục sau khi chương trình/máy tính khởi động lại giữa lượt đang chạy.
+        // Chỉ lần đồng bộ run đầu tiên sau khi chương trình mở mới được coi là "khởi động lại".
+        private bool startupSyncDone = false;
+        private const int RestartRecoveryMaxGapMinutes = 15;
+        private const string RuntimeLogFileName = "scada_runtime.log";
+        private static readonly object runtimeLogLock = new object();
+
         // Accumulator State
         private Dictionary<string, double> accumulatedTimers = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
         private Dictionary<string, double> previousTimerValues = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
@@ -190,7 +198,31 @@ namespace HinoTools.Data.Log
         public string UserID { get; set; } = "root";
 
         [Category("Hino Settings")]
-        public string Password { get; set; } = "101101";
+        public string Password { get; set; } = "";
+
+        // --- Đợt 3B: thông tin đăng nhập MySQL không còn nhúng trong mã nguồn. ---
+        // Ưu tiên giá trị đặt tường minh trên component (ATSCADA designer), sau đó tới
+        // file scada-runtime.config. Thiếu cả hai với user/mật khẩu => báo lỗi rõ ràng
+        // thay vì âm thầm dùng tài khoản mặc định. Xem HinoTools.Data.Config.ScadaConfig.
+        private string DbServer
+        {
+            get { return HinoTools.Data.Config.ScadaConfig.ResolveOptional(ServerName, HinoTools.Data.Config.ScadaConfig.KeyDbServer, "localhost"); }
+        }
+
+        private string DbUser
+        {
+            get { return HinoTools.Data.Config.ScadaConfig.Resolve(UserID, HinoTools.Data.Config.ScadaConfig.KeyDbUser); }
+        }
+
+        private string DbPassword
+        {
+            get { return HinoTools.Data.Config.ScadaConfig.Resolve(Password, HinoTools.Data.Config.ScadaConfig.KeyDbPassword); }
+        }
+
+        private string DbName
+        {
+            get { return HinoTools.Data.Config.ScadaConfig.ResolveOptional(DatabaseName, HinoTools.Data.Config.ScadaConfig.KeyDbName, "scada"); }
+        }
 
         [Category("Hino Settings")]
         public string DatabaseName { get; set; } = "scada";
@@ -203,16 +235,27 @@ namespace HinoTools.Data.Log
         public int PollingInterval { get; set; } = 30000;
 
         [Category("Hino Settings")]
-        [Description("HTTP Server API Port (Disabled, was default 5500).")]
+        [Description("Read API HTTP Server Port (default: 5500). Cấp dữ liệu lô/mẻ/BOM cho hệ ngoài như MES.")]
         public int HttpPort { get; set; } = 5500;
+
+        [Category("Hino Settings")]
+        [Description("Bật/tắt Read API HTTP Server (mặc định: bật).")]
+        public bool HttpApiEnabled { get; set; } = true;
+
+        [Category("Hino Settings")]
+        [Description("Token Read API (gửi qua header X-Api-Token hoặc ?token=). " +
+                     "Để trống thì lấy từ khoá Api.ReadApiToken trong scada-runtime.config. " +
+                     "Không có token ở cả hai nơi => server TỪ CHỐI khởi động.")]
+        public string HttpApiToken { get; set; } = "";
 
         [Category("Hino Settings")]
         [Description("Webhook HTTP Server API Port (default: 5605).")]
         public int WebhookPort { get; set; } = 5605;
 
         [Category("Hino Settings")]
-        [Description("Webhook Secret Security Token.")]
-        public string WebhookToken { get; set; } = "wh_tok_2f8d9b1e4c7a6e5b3d2c1f0a9e8d7c6b";
+        [Description("Token bảo mật webhook. Để trống thì lấy từ khoá Api.WebhookToken " +
+                     "trong scada-runtime.config. Không có token ở cả hai nơi => server TỪ CHỐI khởi động.")]
+        public string WebhookToken { get; set; } = "";
 
         [Category("Hino Settings")]
         [Description("Timeout in seconds before a stopped/paused batch in stage 1-4 is marked as Error (default: 7200s = 2h).")]
@@ -269,26 +312,62 @@ namespace HinoTools.Data.Log
             logItems = GetLogItems().ToList();
             if (logItems.Count == 0) return;
 
-            // Extract DeviceName from the first tag's full name dynamically
-            deviceName = ExtractDeviceName();
-
             dataAccess = new DataAccess();
 
-            // Auto-Migration
+            // Auto-Migration (phải chạy trước khi tra bảng machines)
             CreateDatabaseIfNotExists();
             EnsureBatchesTableExists();
+
+            // Đợt 3B: xác định máy qua bảng danh mục `machines`. KHÔNG khớp => DỪNG KHỞI TẠO.
+            // Ghi dữ liệu sản xuất dưới tên một máy đoán bừa là hỏng cả chuỗi truy xuất lô,
+            // nên ở đây thà không ghi còn hơn ghi sai.
+            string deviceResolveError;
+            deviceName = ResolveDeviceNameOrNull(out deviceResolveError);
+            if (string.IsNullOrEmpty(deviceName))
+            {
+                string msg = "[AlarmReportLogger] DỪNG KHỞI TẠO — không xác định được máy: " + deviceResolveError +
+                             " Hệ sẽ KHÔNG ghi bản ghi nào cho tới khi máy được khai báo trong bảng machines.";
+                System.Diagnostics.Debug.WriteLine(msg);
+                LogDeviceResolutionFailure(deviceResolveError);
+                return;
+            }
+
             CreateTableIfNotExists();
             AddBatchIdColumnIfNeeded(TableName);
             AddRunIdColumnIfNeeded(TableName);
             ResolveOrphanPauseRecords();
 
-            // HTTP API Server (Disabled/Cleared)
-            System.Diagnostics.Debug.WriteLine("[AlarmReportLogger] HTTP Server (port 5500) is disabled.");
+            // Đợt 3B: cảnh báo nếu máy chưa được Core cấp mã MC-.
+            WarnMachinesWithoutMcCode();
+
+            // Read API HTTP Server (cho hệ ngoài như MES).
+            // Token lấy từ property, rỗng thì lấy từ scada-runtime.config; không có thì server tự từ chối chạy.
+            if (HttpApiEnabled)
+            {
+                try
+                {
+                    string readApiToken = HinoTools.Data.Config.ScadaConfig.ResolveOptional(
+                        HttpApiToken, HinoTools.Data.Config.ScadaConfig.KeyReadApiToken, "");
+                    httpServer = new HinoTools.Data.Http.BatchesHttpServer(
+                        GetConnectionStringWithDb(), HttpPort, readApiToken, TableName);
+                    httpServer.Start();
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] Read API HTTP Server start FAILED: {ex.Message}");
+                }
+            }
+            else
+            {
+                System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] Read API HTTP Server (port {HttpPort}) đang tắt theo cấu hình.");
+            }
 
             // Start Webhook HTTP Server
             try
             {
-                webhookServer = new HinoTools.Data.Http.WebhookHttpServer(GetConnectionStringWithDb(), WebhookPort, WebhookToken);
+                string webhookToken = HinoTools.Data.Config.ScadaConfig.ResolveOptional(
+                    WebhookToken, HinoTools.Data.Config.ScadaConfig.KeyWebhookToken, "");
+                webhookServer = new HinoTools.Data.Http.WebhookHttpServer(GetConnectionStringWithDb(), WebhookPort, webhookToken);
                 webhookServer.Start();
             }
             catch (Exception ex)
@@ -303,6 +382,10 @@ namespace HinoTools.Data.Log
             tmrLog.Elapsed += (sender, e) => PollAndLog();
             tmrLog.Start();
             System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] Initialized successfully. Idle Timer started (1000ms).");
+
+            WriteRuntimeLog("START chương trình khởi động, bắt đầu theo dõi PLC.");
+            AppDomain.CurrentDomain.ProcessExit += (s, e) =>
+                WriteRuntimeLog($"STOP chương trình dừng. runId={activeRunId?.ToString() ?? "-"}, congDoan={currentCongDoan}.");
         }
 
         private IEnumerable<LogItem> GetLogItems()
@@ -324,15 +407,96 @@ namespace HinoTools.Data.Log
         }
 
         /// <summary>
-        /// Extract the device name prefix dynamically.
+        /// Đợt 3B: phân giải máy qua bảng danh mục `machines`, KHÔNG đoán từ chuỗi tag.
+        ///
+        /// Trả null khi tag không khớp máy nào. Người gọi (TryInitialize) phải dừng khởi tạo:
+        /// thà không ghi còn hơn ghi dữ liệu sản xuất gán nhầm sang một máy có thật.
+        /// Trước đây chỗ này trả "Unknown"/"TX01" nên bản ghi của máy lạ bị gán im lặng cho TX01.
         /// </summary>
-        private string ExtractDeviceName()
+        private string ResolveDeviceNameOrNull(out string reason)
         {
-            if (Collection == null || Collection.Length == 0)
-                return "Unknown";
+            reason = null;
 
-            var firstTag = Collection[0].Split(';')[0]; // e.g. "AFChemTX01.ThoiGianCapLieu"
-            return HinoTools.Data.Helper.DeviceNameHelper.ExtractDeviceName(firstTag);
+            if (Collection == null || Collection.Length == 0)
+            {
+                reason = "Chưa cấu hình Collection (danh sách tag) — không xác định được máy.";
+                return null;
+            }
+
+            var firstTag = Collection[0].Split(';')[0]; // ví dụ "AFChemTX01.ThoiGianCapLieu"
+
+            HinoTools.Data.Helper.MachineInfo machine;
+            if (HinoTools.Data.Helper.MachineRegistry.TryResolveByTag(
+                    GetConnectionStringWithDb(), firstTag, out machine, out reason))
+            {
+                return machine.DeviceName;
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Đợt 3B: ghi lại việc không phân giải được máy — vào bảng cảnh báo nếu còn kết nối được,
+        /// và luôn ghi ra file log cạnh ứng dụng để người vận hành nhìn thấy kể cả khi DB hỏng.
+        /// Đây là "báo lỗi to" thay cho việc âm thầm gán TX01 trước đây.
+        /// </summary>
+        private void LogDeviceResolutionFailure(string reason)
+        {
+            string message = "KHÔNG XÁC ĐỊNH ĐƯỢC MÁY — từ chối ghi dữ liệu. " + reason;
+
+            try
+            {
+                string logFilePath = System.IO.Path.Combine(
+                    AppDomain.CurrentDomain.BaseDirectory ?? "", "device_resolution_errors.log");
+                System.IO.File.AppendAllText(logFilePath,
+                    $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {message}{Environment.NewLine}");
+            }
+            catch { }
+
+            try
+            {
+                dataAccess.ConnectionString = GetConnectionStringWithDb();
+                string insertSql =
+                    "INSERT INTO `realtime_alarms` (`DateTime`, `DeviceName`, `TagName`, `Value`, `Threshold`, " +
+                    "`Operator`, `Message`, `QuyTrinh`, `CongDoan`, `Severity`) VALUES (" +
+                    $"'{DateTime.Now:yyyy-MM-dd HH:mm:ss}', 'UNKNOWN', " +
+                    $"'{EscapeSql(Collection != null && Collection.Length > 0 ? Collection[0].Split(';')[0] : "")}', " +
+                    $"0, 0, '=', '{EscapeSql(message)}', 0, 'MACHINE', 'HIGH')";
+                dataAccess.ExecuteNonQuery(insertSql);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] Không ghi được cảnh báo máy lạ vào DB: {ex.Message}");
+            }
+        }
+
+        private static string EscapeSql(string value)
+        {
+            if (string.IsNullOrEmpty(value)) return "";
+            return value.Replace("\\", "\\\\").Replace("'", "''");
+        }
+
+        /// <summary>
+        /// Ghi cảnh báo khi máy đang chạy chưa được Core cấp mã MC-.
+        /// Không chặn vận hành (máy vẫn phải chạy), nhưng phải nhìn thấy được.
+        /// </summary>
+        private void WarnMachinesWithoutMcCode()
+        {
+            try
+            {
+                var pending = HinoTools.Data.Helper.MachineRegistry.MachinesWithoutMcCode(GetConnectionStringWithDb());
+                foreach (var machine in pending)
+                {
+                    string msg = $"Máy '{machine.DeviceName}' chưa có mã MC- từ Core. " +
+                                 $"Hãy cập nhật cột mc_code trong bảng machines khi Core cấp mã.";
+                    System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] {msg}");
+                    InsertRealtimeInfoEvent("MACHINE", msg);
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] LỖI kiểm tra mã MC-: {ex.Message}");
+            }
         }
 
         #endregion
@@ -366,18 +530,28 @@ namespace HinoTools.Data.Log
                         // If the database active run ID has changed, reset the in-memory state machine
                         if (activeRunId != dbRunId)
                         {
-                            System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] New active run detected in DB: {dbRunId} (old in-memory: {activeRunId}). Resetting state machine to align.");
-                            activeRunId = dbRunId;
-                            activeBatchId = dbBatchId;
-                            currentCongDoan = 1;
-                            ResetFlags();
-                            ResetAccumulators();
-                            RecoverAccumulatorsFromDb(dbRunId);
-                            hasThoiGianCapLieuStarted = true;
-                            InsertRealtimeInfoEvent("T001", "Bắt đầu cấp liệu");
-                            lastAlarmReportTime = DateTime.MinValue; // Trigger instant logging for the new run
+                            if (!startupSyncDone && activeRunId == null)
+                            {
+                                // Chương trình vừa mở lên mà DB đã có run Active: đây là khởi động lại giữa lượt,
+                                // không phải run mới. Phải xác định công đoạn máy đang ở, không đặt về 1.
+                                RecoverStateAfterRestart(dbRunId, dbBatchId);
+                            }
+                            else
+                            {
+                                System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] New active run detected in DB: {dbRunId} (old in-memory: {activeRunId}). Resetting state machine to align.");
+                                activeRunId = dbRunId;
+                                activeBatchId = dbBatchId;
+                                currentCongDoan = 1;
+                                ResetFlags();
+                                ResetAccumulators();
+                                RecoverAccumulatorsFromDb(dbRunId);
+                                hasThoiGianCapLieuStarted = true;
+                                InsertRealtimeInfoEvent("T001", "Bắt đầu cấp liệu");
+                                lastAlarmReportTime = DateTime.MinValue; // Trigger instant logging for the new run
+                            }
                         }
                     }
+                    startupSyncDone = true;
                 }
                 catch (Exception ex)
                 {
@@ -737,6 +911,125 @@ namespace HinoTools.Data.Log
                 System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] ERROR in PollAndLog: {ex.Message}");
                 tmrLog.Start();
             }
+        }
+
+        /// <summary>
+        /// Ghi nhật ký vận hành ra file cạnh ứng dụng (khởi động, dừng, khôi phục giữa lượt).
+        /// Không bao giờ ném lỗi ra ngoài.
+        /// </summary>
+        private void WriteRuntimeLog(string message)
+        {
+            try
+            {
+                string path = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory ?? "", RuntimeLogFileName);
+                lock (runtimeLogLock)
+                {
+                    System.IO.File.AppendAllText(path,
+                        $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] [{deviceName}] {message}{Environment.NewLine}");
+                }
+            }
+            catch { }
+        }
+
+        private double GetPlcTimerOrZero(string alias)
+        {
+            double value = GetTagValueByAlias(alias);
+            return double.IsNaN(value) ? 0 : value;
+        }
+
+        /// <summary>
+        /// Chương trình mở lại giữa lượt Active: khôi phục công đoạn hiện tại thay vì đặt về 1.
+        /// Thứ tự xác định công đoạn: (1) bộ đếm PLC đang chạy, (2) dòng alarmreport cuối của run
+        /// (nếu còn mới), (3) mặc định công đoạn 1 như hành vi cũ.
+        /// </summary>
+        private void RecoverStateAfterRestart(int dbRunId, int dbBatchId)
+        {
+            activeRunId = dbRunId;
+            activeBatchId = dbBatchId;
+            ResetFlags();
+            ResetAccumulators();
+            RecoverAccumulatorsFromDb(dbRunId);
+
+            double capLieu = GetPlcTimerOrZero("ThoiGianCapLieu");
+            double tron1 = GetPlcTimerOrZero("ThoiGianTron1");
+            double xaDay = GetPlcTimerOrZero("ThoiGianXaDay");
+            double rungXaDay = GetPlcTimerOrZero("ThoiGianRungXaDay");
+            double hutXaDay = GetPlcTimerOrZero("ThoiGianHutXaDay");
+            double tron2 = GetPlcTimerOrZero("ThoiGianTron2");
+            double xaHang = GetPlcTimerOrZero("ThoiGianXaHang");
+            double rungXaHang = GetPlcTimerOrZero("ThoiGianRungXaHang");
+
+            // Dòng alarmreport cuối của run: dùng để lấy lại công đoạn (khi PLC không báo) và QuyTrinh.
+            int lastStage = 0;
+            int lastQuyTrinh = 0;
+            DateTime lastRowTime = DateTime.MinValue;
+            bool hasHistory = false;
+            try
+            {
+                dataAccess.ConnectionString = GetConnectionStringWithDb();
+                var dt = dataAccess.ExecuteQuery(
+                    $"SELECT `CongDoanMay`, `QuyTrinh`, `DateTime` FROM `{TableName}` " +
+                    $"WHERE `runId` = {dbRunId} ORDER BY `ID` DESC LIMIT 1");
+                if (dt != null && dt.Rows.Count > 0)
+                {
+                    hasHistory = true;
+                    int.TryParse(Convert.ToString(dt.Rows[0]["CongDoanMay"]), out lastStage);
+                    int.TryParse(Convert.ToString(dt.Rows[0]["QuyTrinh"]), out lastQuyTrinh);
+                    lastRowTime = Convert.ToDateTime(dt.Rows[0]["DateTime"]);
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] RecoverStateAfterRestart: không đọc được dòng alarmreport cuối: {ex.Message}");
+            }
+
+            int stage = 0;
+            string source;
+            if (xaHang > 0 || rungXaHang > 0) stage = 5;
+            else if (tron2 > 0) stage = 4;
+            else if (xaDay > 0 || rungXaDay > 0 || hutXaDay > 0) stage = 3;
+            else if (tron1 > 0) stage = 2;
+            else if (capLieu > 0) stage = 1;
+
+            if (stage > 0)
+            {
+                source = "PLC";
+            }
+            else if (hasHistory && lastStage >= 1 && lastStage <= 5 &&
+                     (DateTime.Now - lastRowTime).TotalMinutes <= RestartRecoveryMaxGapMinutes)
+            {
+                stage = lastStage;
+                source = "alarmreport";
+            }
+            else
+            {
+                stage = 1;
+                source = "mac-dinh";
+            }
+
+            currentCongDoan = stage;
+            if (lastQuyTrinh > 0) currentQuyTrinh = lastQuyTrinh;
+
+            // Đặt cờ "đã bắt đầu" theo công đoạn vừa khôi phục để điều kiện chuyển công đoạn chạy tiếp được.
+            hasThoiGianCapLieuStarted = stage == 1;
+            hasThoiGianTron1Started = stage == 2 && tron1 > 0;
+            hasThoiGianHutXaStarted = stage == 3 && hutXaDay > 0;
+            hasThoiGianTron2Started = stage == 4 && tron2 > 0;
+            hasThoiGianRungXaHangStarted = stage == 5 && rungXaHang > 0;
+            hasThoiGianXaHangStarted = stage == 5 && xaHang > 0;
+
+            // Chỉ ghi "Bắt đầu cấp liệu" khi đây thật sự là run chưa có dòng đo nào.
+            if (!hasHistory && stage == 1)
+            {
+                InsertRealtimeInfoEvent("T001", "Bắt đầu cấp liệu");
+            }
+
+            lastAlarmReportTime = DateTime.MinValue; // ghi ngay dòng đầu sau khi khôi phục
+
+            WriteRuntimeLog(
+                $"RECOVER khôi phục giữa lượt: runId={dbRunId}, batchId={dbBatchId}, congDoan={stage} (nguồn: {source}), " +
+                $"quyTrinh={currentQuyTrinh}, alarmreportCuoi=[congDoan={lastStage}, luc={(hasHistory ? lastRowTime.ToString("yyyy-MM-dd HH:mm:ss") : "-")}], " +
+                $"PLC=[capLieu={capLieu}, tron1={tron1}, xaDay={xaDay}, rungXaDay={rungXaDay}, hutXaDay={hutXaDay}, tron2={tron2}, xaHang={xaHang}, rungXaHang={rungXaHang}]");
         }
 
         private void ResetFlags()
@@ -1360,12 +1653,12 @@ namespace HinoTools.Data.Log
 
         private string GetConnectionStringWithoutDb()
         {
-            return $"Server={ServerName};Uid={UserID};Pwd={Password};";
+            return $"Server={DbServer};Uid={DbUser};Pwd={DbPassword};CharSet=utf8;";
         }
 
         private string GetConnectionStringWithDb()
         {
-            return $"Server={ServerName};Uid={UserID};Pwd={Password};Database={DatabaseName}";
+            return $"Server={DbServer};Uid={DbUser};Pwd={DbPassword};CharSet=utf8;Database={DbName}";
         }
 
         /// <summary>
@@ -1376,7 +1669,7 @@ namespace HinoTools.Data.Log
             try
             {
                 dataAccess.ConnectionString = GetConnectionStringWithoutDb();
-                var query = $"CREATE DATABASE IF NOT EXISTS `{DatabaseName}`";
+                var query = $"CREATE DATABASE IF NOT EXISTS `{DbName}`";
                 return dataAccess.ExecuteNonQuery(query) >= 0;
             }
             catch { return false; }
@@ -1431,6 +1724,21 @@ namespace HinoTools.Data.Log
 
         private void EnsureBatchesTableExists()
         {
+            // Đợt 3B: bảng machines + cột official_lot_code (dùng chung 1 nguồn với 2 HTTP server).
+            // Phải chạy trước khi phân giải máy vì việc phân giải cần bảng machines.
+            try
+            {
+                using (var conn = new MySqlConnection(GetConnectionStringWithDb()))
+                {
+                    conn.Open();
+                    Db.SchemaMigrator.EnsureDot3BSchema(conn);
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] LỖI chạy migration Đợt 3B: {ex.Message}");
+            }
+
             try
             {
                 dataAccess.ConnectionString = GetConnectionStringWithDb();
@@ -1553,7 +1861,10 @@ namespace HinoTools.Data.Log
                 string migrateRunsSql = "INSERT INTO `runs` (`batch_id`, `run_number`, `name`, `status`, `start_time`, `end_time`, `created_at`) " +
                                         "SELECT b.id, 1, CONCAT(b.name, '-Me01'), b.status, b.start_time, b.end_time, b.created_at " +
                                         "FROM `batches` b " +
-                                        "WHERE NOT EXISTS (SELECT 1 FROM `runs` r WHERE r.batch_id = b.id)";
+                                        "WHERE NOT EXISTS (SELECT 1 FROM `runs` r WHERE r.batch_id = b.id) " +
+                                        // Lô Pending chưa có run là webhook đang tạo nền: tạo chen ở đây sẽ đâm
+                                        // UNIQUE tên run và làm webhook mất BOM. Lô đã huỷ thì không cần run.
+                                        "AND b.status NOT IN ('Pending', 'Cancelled')";
                 int rows = dataAccess.ExecuteNonQuery(migrateRunsSql);
                 if (rows > 0)
                 {
@@ -1613,8 +1924,15 @@ namespace HinoTools.Data.Log
                     // Update this run to Active and set start_time
                     string updateRunQuery = $"UPDATE `runs` " +
                                             $"SET `status` = 'Active', `start_time` = '{DateTime.Now:yyyy-MM-dd HH:mm:ss}' " +
-                                            $"WHERE `id` = {runId}";
-                    dataAccess.ExecuteNonQuery(updateRunQuery);
+                                            $"WHERE `id` = {runId} AND `status` = 'Pending'";
+                    if (dataAccess.ExecuteNonQuery(updateRunQuery) == 0)
+                    {
+                        // Run vừa bị huỷ từ MES sau lúc đọc hàng chờ. Hàm này chỉ chạy đầu chu trình
+                        // nên tìm lại ngay; hết mẻ chờ thì rơi xuống tạo lô UNPLANNED, không mất dữ liệu.
+                        System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] Run ID {runId} không còn Pending, tìm lại.");
+                        LinkOrCreateActiveBatch();
+                        return;
+                    }
 
                     // Update parent batch to Active if it is still Pending or start_time is null
                     bool shouldUpdateBatch = batchStatus == "Pending" || dt.Rows[0]["batch_start_time"] == DBNull.Value;
@@ -1633,13 +1951,21 @@ namespace HinoTools.Data.Log
                 }
                 else
                 {
-                    // 2. If no Pending run exists, auto-generate a fallback/emergency batch & run (Self-healing)
+                    // 2. Máy chạy mà không có mẻ nào theo kế hoạch => LÔ MỒ CÔI.
+                    //
+                    // Đợt 3B: lô này vẫn được tạo để không mất dữ liệu chạy máy, NHƯNG:
+                    //   - đặt tên rõ ràng "UNPLANNED-..." để không ai nhầm là mã lô,
+                    //   - official_lot_code để TRỐNG (SCADA không bịa mã nghiệp vụ),
+                    //   - bắn cảnh báo to cho vận hành,
+                    //   - hồ sơ QA/QC bị chặn xuất cho tới khi gán mã lô chính thức
+                    //     (xem BatchRecordExportService).
                     string todayStr = DateTime.Now.ToString("yyyyMMdd");
                     int nextStt = 1;
-                    
-                    // Find the last batch created today for this device
+
+                    // Đếm riêng theo tiền tố UNPLANNED để không lẫn với lô có kế hoạch
+                    string unplannedPrefix = $"UNPLANNED-{deviceName}-{todayStr}-";
                     string selectLastQuery = $"SELECT `name` FROM `batches` " +
-                                             $"WHERE `device_name` = '{deviceName}' AND DATE(`created_at`) = CURDATE() " +
+                                             $"WHERE `name` LIKE '{EscapeSql(unplannedPrefix)}%' " +
                                              $"ORDER BY `id` DESC LIMIT 1";
                     var lastObj = dataAccess.ExecuteScalarQuery(selectLastQuery);
                     if (lastObj != null && lastObj != DBNull.Value)
@@ -1650,10 +1976,11 @@ namespace HinoTools.Data.Log
                             nextStt = lastStt + 1;
                         }
                     }
-                    
-                    string fallbackBatchName = $"{deviceName}-{todayStr}-{nextStt:D2}";
-                    
-                    // Insert Batch and mark as Active immediately, then get its ID in the same query
+
+                    string fallbackBatchName = $"{unplannedPrefix}{nextStt:D2}";
+
+                    // Insert Batch and mark as Active immediately, then get its ID in the same query.
+                    // official_lot_code KHÔNG được set => NULL.
                     string insertBatchQuery = $"INSERT INTO `batches` (`name`, `device_name`, `status`, `total_runs`, `start_time`, `created_at`) " +
                                               $"VALUES ('{fallbackBatchName}', '{deviceName}', 'Active', 1, '{DateTime.Now:yyyy-MM-dd HH:mm:ss}', NOW()); " +
                                               $"SELECT LAST_INSERT_ID();";
@@ -1674,7 +2001,12 @@ namespace HinoTools.Data.Log
                         activeRunId = Convert.ToInt32(lastRunIdObj);
                     }
                     
-                    System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] No Pending run found. Created fallback Active Batch '{fallbackBatchName}' (ID: {activeBatchId}) and Run (ID: {activeRunId}).");
+                    System.Diagnostics.Debug.WriteLine($"[AlarmReportLogger] Không có mẻ theo kế hoạch. Đã tạo lô mồ côi '{fallbackBatchName}' (ID: {activeBatchId}), Run (ID: {activeRunId}).");
+
+                    // Cảnh báo to cho vận hành: máy đang chạy ngoài kế hoạch.
+                    InsertRealtimeErrorEvent("UNPLANNED",
+                        $"MÁY CHẠY KHÔNG CÓ KẾ HOẠCH — đã tạo lô '{fallbackBatchName}' chưa có mã lô chính thức. " +
+                        $"Hồ sơ QA/QC của lô này sẽ BỊ CHẶN XUẤT cho tới khi gán mã lô chính thức từ Base/MES.");
                 }
             }
             catch (Exception ex)

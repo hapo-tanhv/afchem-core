@@ -10,7 +10,7 @@
 ## Chuẩn bị
 
 ### 1. Cấu hình MySQL
-- Server: `localhost`, User: `root`, Password: `100100` (hoặc `101101`)
+- Server: `localhost`, User: `root`, Password: `100100` (hoặc `<MAT_KHAU>`)
 - Database: `scada` (sẽ được tự động tạo)
 
 ### 2. Cấu hình SCADA
@@ -36,7 +36,7 @@ this.alarmReportLogger1 = new HinoTools.Data.Log.AlarmReportLogger(this.componen
 this.alarmReportLogger1.Driver = this.iDriver1;
 this.alarmReportLogger1.ServerName = "localhost";
 this.alarmReportLogger1.UserID = "root";
-this.alarmReportLogger1.Password = "101101";
+this.alarmReportLogger1.Password = "<MAT_KHAU>";
 this.alarmReportLogger1.DatabaseName = "scada";
 this.alarmReportLogger1.TableName = "alarmreport";
 this.alarmReportLogger1.PollingInterval = 30000;
@@ -59,7 +59,7 @@ this.realtimeThresholdLogger1 = new HinoTools.Data.Log.RealtimeThresholdLogger(t
 this.realtimeThresholdLogger1.Driver = this.iDriver1;
 this.realtimeThresholdLogger1.ServerName = "localhost";
 this.realtimeThresholdLogger1.UserID = "root";
-this.realtimeThresholdLogger1.Password = "101101";
+this.realtimeThresholdLogger1.Password = "<MAT_KHAU>";
 this.realtimeThresholdLogger1.DatabaseName = "scada";
 this.realtimeThresholdLogger1.TableName = "realtime_alarms";
 this.realtimeThresholdLogger1.ScanInterval = 3000;

@@ -87,3 +87,6 @@ plans/
 
 # Temporary scratch scripts
 scratch/
+
+# Đợt 3B: cấu hình runtime chứa mật khẩu DB + token API — KHÔNG commit
+scada-runtime.config
